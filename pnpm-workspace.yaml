@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@pinia/nuxt@1.0.2'
+  - pinia@4.0.3
