@@ -39,7 +39,7 @@ function last(q: QuestionWithStats): string {
               @update:model-value="emit('selectAll', $event)"
             />
           </th>
-          <th class="col-q">Question</th>
+          <th class="col-q">Question ({{ questions.length }})</th>
           <th>Difficulty</th>
           <th>Importance</th>
           <th>Category</th>

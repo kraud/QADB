@@ -195,13 +195,13 @@ onMounted(fetchQuestions)
       <div>
         <div class="list-top">
           <SortControl v-model:sort-key="sortKey" v-model:sort-dir="sortDir" />
+          <div v-if="selection.length" class="selection-bar">
+            <span class="count">{{ selection.length }} selected</span>
+            <Switch v-model="followOrder" size="sm" label="Follow current sort/order" />
+            <Btn size="sm" @click="startPractice">Start practice</Btn>
+          </div>
         </div>
 
-        <div v-if="selection.length" class="selection-bar">
-          <span class="count">{{ selection.length }} selected</span>
-          <Switch v-model="followOrder" size="sm" label="Follow current sort/order" />
-          <Btn size="sm" @click="startPractice">Start practice</Btn>
-        </div>
 
         <template v-if="loading">
           <div class="table-wrap">

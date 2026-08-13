@@ -26,7 +26,10 @@ const emit = defineEmits<{
       title="Ascending / Descending"
       @click="emit('update:sortDir', sortDir === 'asc' ? 'desc' : 'asc')"
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 15l5 5 5-5M12 4v16" /></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path v-if="sortDir === 'asc'" d="M7 15l5 5 5-5M12 4v16" />
+        <path v-else d="M7 9l5-5 5 5M12 19V3" />
+      </svg>
     </button>
   </div>
 </template>
