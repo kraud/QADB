@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
   const amountOp = query.amountOp === 'gt' || query.amountOp === 'lt' || query.amountOp === 'eq' ? query.amountOp : undefined
   const amountValue = Number.parseInt(String(query.amountValue ?? ''), 10)
   const recentlyFailed = query.recentlyFailed === 'true'
+  const q = typeof query.q === 'string' ? query.q.trim() : ''
   const sortKey = ['difficulty', 'importance', 'pct', 'amount'].includes(String(query.sortKey))
     ? (String(query.sortKey) as 'difficulty' | 'importance' | 'pct' | 'amount')
     : undefined
@@ -48,6 +49,12 @@ export default defineEventHandler(async (event) => {
   }
   if (recentlyFailed) {
     conditions.push(and(eq(stats.lastCorrect, 0), isNotNull(stats.attemptCount))!)
+  }
+  if (q) {
+    for (const token of q.split(/\s+/).filter(Boolean)) {
+      const escaped = token.replace(/[!%_]/g, (c) => '!' + c)
+      conditions.push(sql`${questions.question} like ${`%${escaped}%`} escape '!'`)
+    }
   }
 
   const tiebreak = [asc(questions.created_at), asc(questions.id)]

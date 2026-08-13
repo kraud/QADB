@@ -15,6 +15,7 @@ const filters = reactive<Filters>({
   op: '>',
   n: 0,
   recent: false,
+  q: '',
 })
 
 const sortKey = ref<SortKey>('')
@@ -41,6 +42,7 @@ const activeCount = computed(() => {
   if (filters.mastered !== 'all') n++
   if (filters.op !== '>' || filters.n > 0) n++
   if (filters.recent) n++
+  if (filters.q.trim()) n++
   return n
 })
 
@@ -58,6 +60,7 @@ function buildQuery(): string {
     qs.set('amountValue', String(filters.n))
   }
   if (filters.recent) qs.set('recentlyFailed', 'true')
+  if (filters.q.trim()) qs.set('q', filters.q.trim())
   if (sortKey.value) qs.set('sortKey', sortKey.value)
   if (sortDir.value !== 'asc') qs.set('sortDir', sortDir.value)
   const s = qs.toString()
@@ -88,7 +91,16 @@ async function fetchQuestions() {
   loading.value = false
 }
 
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+function onSearchInput(e: Event) {
+  filters.q = (e.target as HTMLInputElement).value
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(fetchQuestions, 250)
+}
+onBeforeUnmount(() => clearTimeout(searchTimer))
+
 function resetFilters() {
+  clearTimeout(searchTimer)
   filters.diff = []
   filters.imp = []
   filters.cat = []
@@ -97,6 +109,7 @@ function resetFilters() {
   filters.op = '>'
   filters.n = 0
   filters.recent = false
+  filters.q = ''
   fetchQuestions()
 }
 
@@ -194,7 +207,13 @@ onMounted(fetchQuestions)
 
       <div>
         <div class="list-top">
-          <SortControl v-model:sort-key="sortKey" v-model:sort-dir="sortDir" />
+          <div class="list-top-left">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+              <input class="input" type="search" :value="filters.q" placeholder="Search questions" aria-label="Search questions" @input="onSearchInput" />
+            </div>
+            <SortControl v-model:sort-key="sortKey" v-model:sort-dir="sortDir" />
+          </div>
           <div v-if="selection.length" class="selection-bar">
             <span class="count">{{ selection.length }} selected</span>
             <Switch v-model="followOrder" size="sm" label="Follow current sort/order" />

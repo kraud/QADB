@@ -35,6 +35,7 @@ export interface Filters {
   op: '>' | '<' | '='
   n: number
   recent: boolean
+  q: string
 }
 
 export type SortKey = '' | 'difficulty' | 'importance' | 'pct' | 'amount'

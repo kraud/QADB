@@ -308,6 +308,10 @@ p { text-wrap: pretty; }
 }
 .selection-bar .count { font-weight: 600; font-size: 13.5px; }
 .selection-bar .follow { font-size: 12.5px; color: var(--fg); margin-left: auto; }
+.list-top-left { display: flex; align-items: center; gap: var(--gap-sm); flex-wrap: wrap; }
+.search-box { position: relative; display: flex; align-items: center; }
+.search-box svg { position: absolute; left: 10px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+.search-box .input { padding-left: 32px; width: 220px; }
 
 /* table */
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }

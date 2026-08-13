@@ -25,6 +25,7 @@ const activeCount = computed(() => {
   if (props.filters.mastered !== 'all') n++
   if (props.filters.op !== '>' || props.filters.n > 0) n++
   if (props.filters.recent) n++
+  if (props.filters.q.trim()) n++
   return n
 })
 
@@ -59,6 +60,7 @@ function reset() {
   props.filters.op = '>'
   props.filters.n = 0
   props.filters.recent = false
+  props.filters.q = ''
   emit('reset')
 }
 </script>
