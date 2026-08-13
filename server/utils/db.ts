@@ -1,11 +1,16 @@
-// `@libsql/client` (main entry) is required: drizzle-orm's libsql driver
-// statically imports it, and it handles both Turso (`libsql://`) and local
-// `file:` URLs. Its native `libsql` package loads a platform binding
-// (`@libsql/<platform>`) that Nitro's tracer can't bundle — the `postbuild`
-// script copies that binding into `.output/server/node_modules` (see
-// scripts/copy-libsql-binding.mjs).
-import { createClient } from '@libsql/client'
-import { drizzle } from 'drizzle-orm/libsql'
+// Use the pure-JS hrana client (`@libsql/client/http` + `drizzle-orm/libsql/http`).
+//
+// The default `@libsql/client` / `drizzle-orm/libsql` entries statically load
+// the native `libsql` package, which requires a platform binary
+// (`@libsql/<platform>`) via a dynamic import. Nitro's module tracer can't
+// bundle that binary, so the production/Vercel server crashes at startup with
+// "Cannot find module '@libsql/<platform>'". The http subpath has no native
+// dependency and serves Turso (`libsql://` → `https://`) over hrana.
+//
+// Tradeoff: `file:` (local SQLite) URLs are not supported by the http client —
+// this project runs against Turso (see the design doc's "no local-file fallback").
+import { createClient } from '@libsql/client/http'
+import { drizzle } from 'drizzle-orm/libsql/http'
 import * as schema from '../../db/schema'
 
 const config = useRuntimeConfig()
