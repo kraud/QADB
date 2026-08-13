@@ -2,6 +2,7 @@
 import type { AttemptRow, QuestionWithStats } from '#shared/types/qadb'
 import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL } from '#shared/enums'
 import { fmtDT } from '~/utils/format'
+import { renderMarkdown } from '~/utils/markdown'
 
 const route = useRoute()
 const api = useApi()
@@ -88,7 +89,7 @@ function practiceOne() {
 
       <div class="callout">
         <div class="callout-label">Answer summary</div>
-        <p>{{ question.answer_summary }}</p>
+        <div class="md" v-html="renderMarkdown(question.answer_summary)"></div>
       </div>
 
       <div class="detail-meta"><h2>Track record</h2></div>

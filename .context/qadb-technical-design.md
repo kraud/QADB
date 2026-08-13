@@ -77,7 +77,7 @@ Three tables, integer timestamps (unix ms), text PKs (cuid/uuid generated in app
 - `id` text PK
 - `user_id` text NOT NULL → `users.id` ON DELETE CASCADE
 - `question` text NOT NULL
-- `answer_summary` text NOT NULL (short, spoken-style)
+- `answer_summary` text NOT NULL (short, spoken-style; Markdown source — rendered read-only in practice and detail; edited as raw Markdown in the editor; raw HTML allowed and sanitized)
 - `difficulty` text NOT NULL  (app-validated: easy|medium|hard)
 - `importance` text NOT NULL   (app-validated: low|mid|high)
 - `category` text NOT NULL      (app-validated: HTML|CSS|JS|API|React; others added via `shared/enums.ts`)
@@ -175,6 +175,7 @@ Layout (per prototype): sticky left sidebar `FiltersPanel` (244px) + list column
 `QuestionEditorModal.vue` — overlay dialog (focus-trapped; Esc or overlay click closes). Opened from Content ("Add question" button, row edit icon) and Detail ("Edit").
 
 - Create fields: `question` (textarea, required), `answer_summary` (textarea, required), `difficulty` (segmented easy/medium/hard, default medium), `importance` (segmented low/mid/high, default mid), `category` (single-value chip select, default JS), `link?` (optional URL).
+- The answer field has a **Markdown/Display** segmented toggle: Markdown edits the raw source (textarea); Display renders a read-only, sanitized preview via `app/utils/markdown.ts`. The saved value is always the raw Markdown; the toggle is view-only.
 - Edit mode adds: a `mastered` toggle and a danger zone — "Delete question" opens a confirm dialog warning that the question's practice history (N attempts) is deleted too (cascade).
 - Submit → `POST /api/questions` (create) or `PATCH /api/questions/[id]` (edit); success closes the modal, refreshes the current view, and toasts. Client-side required-field errors inline; server validation/409 errors surface inline too.
 - Delete confirm → `DELETE /api/questions/[id]`; if the current view is that question's detail page, redirect to `/content` after delete.
@@ -182,12 +183,12 @@ Layout (per prototype): sticky left sidebar `FiltersPanel` (244px) + list column
 ### Question Detail (`/questions/[id]`)
 
 - Back link → `/content`; question prompt as h1; badge row (difficulty, importance, category); mastered toggle pill (reversible); actions: Edit (editor modal), Delete (confirm dialog), "Open original question →" (external link when present).
-- Answer summary in a labeled callout — always visible on detail (reference view, unlike practice where it's hidden).
+- Answer summary in a labeled callout — rendered as Markdown (read-only, sanitized); always visible on detail (reference view, unlike practice where it's hidden).
 - Track record: summary line (times practiced, correct count, % correct — 1 decimal, color-coded) + chronological history table, **newest first** (matches `answered_at DESC`), each row date+time and ✔/✘. Empty state: "Not practiced yet" + "Practice this question" (starts a single-question curated session).
 
 ### Practice Sessions
 
-**Shared UI** (`PracticeCard.vue`): mode label ("Practice — N questions selected" / "Random practice"); progress indicator (`n / total` + thin bar); question prompt; a "Mark as mastered" toggle **always visible under the prompt** (resolved in prototype); answer hidden behind a "Show answer" button (reveals `answer_summary`); after reveal: "Correct" and "Incorrect" buttons (record an attempt via `POST /api/attempts`, then refresh that question's stats in place) plus a note "Only Correct / Incorrect records an attempt. Skipping with Next records nothing."; "Next" button (always enabled); `TrackRecord.vue` compact — a collapsible block with mini stats (practiced, % correct, last result) + last 8 history rows.
+**Shared UI** (`PracticeCard.vue`): mode label ("Practice — N questions selected" / "Random practice"); progress indicator (`n / total` + thin bar); question prompt; a "Mark as mastered" toggle **always visible under the prompt** (resolved in prototype); answer hidden behind a "Show answer" button (reveals `answer_summary`, rendered as Markdown — read-only); after reveal: "Correct" and "Incorrect" buttons (record an attempt via `POST /api/attempts`, then refresh that question's stats in place) plus a note "Only Correct / Incorrect records an attempt. Skipping with Next records nothing."; "Next" button (always enabled); `TrackRecord.vue` compact — a collapsible block with mini stats (practiced, % correct, last result) + last 8 history rows.
 
 **Two entry modes:**
 
@@ -232,6 +233,7 @@ Layout (per prototype): sticky left sidebar `FiltersPanel` (244px) + list column
 - Port the prototype's design tokens verbatim into a CSS variables file: oklch palette with semantic roles (accent, success, danger, mastered, difficulty scale, importance scale, category hues, neutrals), radii, spacing, shadows — including the `[data-theme="dark"]` variant.
 - Theme toggle (light/dark) in `AppHeader`, persisted to `localStorage` (key `qadb_theme`), applied via `data-theme` on `<html>` (set in a layout/plugin to avoid a flash of the wrong theme).
 - Component class names and responsive breakpoints (960/720) map 1:1 from the prototype (`btn`, `badge`, `chip`, `seg`, `switch`, `checkbox`, `input`, `modal`, `toast`, `empty`, `skeleton`, `qtable`, `card-list`).
+- Markdown rendering: `app/utils/markdown.ts` exposes `renderMarkdown(src)` (`markdown-it` with `html: true` + `isomorphic-dompurify` sanitization, safe for `v-html` on both SSR and client). Markdown typography comes from the global `.md` content class in `tokens.css` (no scoped styles).
 
 ### Deployment (Vercel)
 

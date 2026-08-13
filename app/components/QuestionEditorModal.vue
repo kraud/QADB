@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { QuestionWithStats } from '#shared/types/qadb'
 import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL } from '#shared/enums'
+import { renderMarkdown } from '~/utils/markdown'
 
 const props = defineProps<{ open: boolean; questionId: string | null }>()
 const emit = defineEmits<{
@@ -13,6 +14,7 @@ const api = useApi()
 
 const question = ref('')
 const answer = ref('')
+const answerMode = ref<'markdown' | 'display'>('markdown')
 const difficulty = ref('medium')
 const importance = ref('mid')
 const category = ref('JS')
@@ -28,10 +30,15 @@ const title = computed(() => (isEdit.value ? 'Edit question' : 'Add question'))
 
 const diffOptions = DIFFICULTY.map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
 const impOptions = IMPORTANCE.map((v) => ({ value: v, label: IMPORTANCE_LABEL[v] }))
+const answerModeOptions = [
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'display', label: 'Display' },
+]
 
 function reset() {
   question.value = ''
   answer.value = ''
+  answerMode.value = 'markdown'
   difficulty.value = 'medium'
   importance.value = 'mid'
   category.value = 'JS'
@@ -148,7 +155,23 @@ function requestDelete() {
 
         <template v-else>
           <Input v-model="question" label="Question" type="textarea" placeholder="The interview prompt" :error="fieldErrors.question" />
-          <Input v-model="answer" label="Answer summary" type="textarea" placeholder="What you'd say out loud in the interview — short and spoken-style" :error="fieldErrors.answer_summary" />
+          <div class="answer-edit">
+            <div class="answer-field-head">
+              <label>Answer summary</label>
+              <Seg v-model="answerMode" :options="answerModeOptions" />
+            </div>
+            <Input
+              v-if="answerMode === 'markdown'"
+              v-model="answer"
+              type="textarea"
+              placeholder="What you'd say out loud in the interview — short and spoken-style. **Markdown** supported."
+              :error="fieldErrors.answer_summary"
+            />
+            <div v-else class="answer-preview md" :class="{ invalid: !!fieldErrors.answer_summary }" v-html="renderMarkdown(answer)" />
+            <div v-if="answerMode === 'display' && fieldErrors.answer_summary" class="field-err">
+              {{ fieldErrors.answer_summary }}
+            </div>
+          </div>
 
           <div class="field">
             <label>Difficulty</label>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AttemptRow, QuestionWithStats } from '#shared/types/qadb'
+import { renderMarkdown } from '~/utils/markdown'
 
 type Q = QuestionWithStats & { attempts: AttemptRow[] }
 
@@ -41,7 +42,7 @@ const progress = computed(() => Math.round((props.index / props.total) * 100))
     <div class="answer-reveal">
       <Btn v-if="!revealed" size="lg" @click="emit('reveal')">Show answer</Btn>
       <div v-else class="answer-body">
-        <div class="answer-text">{{ question.answer_summary }}</div>
+        <div class="answer-text md" v-html="renderMarkdown(question.answer_summary)"></div>
         <div class="grade-row">
           <Btn variant="success" :disabled="grading" @click="emit('grade', true)">Correct</Btn>
           <Btn variant="error" :disabled="grading" @click="emit('grade', false)">Incorrect</Btn>

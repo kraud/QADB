@@ -16,6 +16,8 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@pinia/nuxt": "^1.0.2",
     "drizzle-orm": "^0.45.2",
+    "isomorphic-dompurify": "^3.22.0",
+    "markdown-it": "^15.0.0",
     "nuxt": "^4.5.2",
     "nuxt-auth-utils": "^0.5.30",
     "pinia": "^4.0.3",
