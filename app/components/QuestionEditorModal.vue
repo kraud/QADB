@@ -11,6 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const api = useApi()
+const { toast } = useToast()
 
 const question = ref('')
 const answer = ref('')
@@ -21,6 +22,7 @@ const category = ref('JS')
 const link = ref('')
 const mastered = ref(false)
 const saving = ref(false)
+const formatting = ref(false)
 const loading = ref(false)
 const serverError = ref('')
 const fieldErrors = reactive({ question: '', answer_summary: '', link: '' })
@@ -127,6 +129,23 @@ async function save() {
   }
 }
 
+async function formatWithAi() {
+  if (!answer.value.trim() || formatting.value) return
+  formatting.value = true
+  try {
+    const { content } = await api<{ content: string }>('/api/format-answer', {
+      method: 'POST',
+      body: { content: answer.value },
+    })
+    answer.value = content
+    toast('Formatted with AI')
+  } catch {
+    toast('Could not format. Try again.')
+  } finally {
+    formatting.value = false
+  }
+}
+
 function requestDelete() {
   if (props.questionId) emit('requestDelete', props.questionId)
 }
@@ -158,16 +177,41 @@ function requestDelete() {
           <div class="answer-edit">
             <div class="answer-field-head">
               <label>Answer summary</label>
-              <Seg v-model="answerMode" :options="answerModeOptions" />
+              <div class="answer-actions">
+                <Btn
+                  v-if="answerMode === 'markdown'"
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  :loading="formatting"
+                  :disabled="!answer.trim()"
+                  @click="formatWithAi"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    style="width: 14px; height: 14px"
+                  >
+                      <path d="M19 9l-1.25-2.75L15 5l2.75-1.25L19 1l1.25 2.75L23 5l-2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
+                  </svg>
+                  Format
+                </Btn>
+                <Seg v-model="answerMode" :options="answerModeOptions" />
+              </div>
             </div>
             <Input
-              v-if="answerMode === 'markdown'"
+              v-show="answerMode === 'markdown'"
               v-model="answer"
               type="textarea"
               placeholder="What you'd say out loud in the interview — short and spoken-style. **Markdown** supported."
               :error="fieldErrors.answer_summary"
             />
-            <div v-else class="answer-preview md" :class="{ invalid: !!fieldErrors.answer_summary }" v-html="renderMarkdown(answer)" />
+            <div v-if="answerMode === 'display'" class="answer-preview md" :class="{ invalid: !!fieldErrors.answer_summary }" v-html="renderMarkdown(answer)" />
             <div v-if="answerMode === 'display' && fieldErrors.answer_summary" class="field-err">
               {{ fieldErrors.answer_summary }}
             </div>

@@ -13,6 +13,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     tursoUrl: '',
     tursoToken: '',
+    opencodeApiKey: '',
     sessionPassword: '',
     session: {
       cookie: {
