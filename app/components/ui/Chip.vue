@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ active?: boolean; color?: string }>()
+defineProps<{ active?: boolean; color?: string; disabled?: boolean }>()
 defineEmits<{ (e: 'click'): void }>()
 </script>
 
@@ -7,8 +7,9 @@ defineEmits<{ (e: 'click'): void }>()
   <button
     type="button"
     class="chip"
-    :class="{ on: active }"
-    :data-variant="color ? '' : null"
+    :class="{ on: active, off: disabled }"
+    :disabled="disabled"
+    :aria-disabled="disabled"
     :style="color ? { '--cv': color } : undefined"
     @click="$emit('click')"
   >

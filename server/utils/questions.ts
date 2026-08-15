@@ -1,5 +1,6 @@
 import { count, max, sql, sum } from 'drizzle-orm'
 import type { QuestionWithStats } from '#shared/types/qadb'
+import { CATEGORY } from '#shared/enums'
 import { attempts } from '../../db/schema'
 
 type StatColumns = {
@@ -42,6 +43,17 @@ export function withQuestionStats() {
     .as('qstats')
 }
 
+/** Decodes a JSON category array column into valid values; malformed rows yield `[]`. */
+function parseCategories(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((v): v is string => typeof v === 'string' && (CATEGORY as readonly string[]).includes(v))
+  } catch {
+    return []
+  }
+}
+
 /** Shapes a joined `questions` + stats row into the wire format (computed pct, null-safe counts). */
 export function mapQuestionRow(row: QuestionColumns & Partial<StatColumns>): QuestionWithStats {
   const attemptCount = row.attemptCount ?? 0
@@ -54,7 +66,7 @@ export function mapQuestionRow(row: QuestionColumns & Partial<StatColumns>): Que
     answer_summary: row.answer_summary,
     difficulty: row.difficulty,
     importance: row.importance,
-    category: row.category,
+    category: parseCategories(row.category),
     link: row.link,
     mastered: row.mastered,
     created_at: row.created_at,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL } from '#shared/enums'
+import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { rel } from '~/utils/format'
 
 const props = defineProps<{ questions: QuestionWithStats[]; selection: string[] }>()
@@ -68,7 +68,7 @@ function last(q: QuestionWithStats): string {
           <td class="col-q"><span class="q-cell">{{ q.question }}</span></td>
           <td><Badge tone="diff" :color="DIFFICULTY_COLOR[q.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[q.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge></td>
           <td><Badge tone="imp" :color="IMPORTANCE_COLOR[q.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[q.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge></td>
-          <td><Badge tone="cat" :color="CATEGORY_COLOR[q.category as keyof typeof CATEGORY_COLOR]">{{ q.category }}</Badge></td>
+          <td><span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in q.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span></td>
           <td class="col-num">{{ q.stats.attemptCount }}</td>
           <td class="col-num">{{ pct(q) }}</td>
           <td class="col-num">{{ last(q) }}</td>
@@ -116,7 +116,7 @@ function last(q: QuestionWithStats): string {
       <div class="meta-row">
         <Badge tone="diff" :color="DIFFICULTY_COLOR[q.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[q.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge>
         <Badge tone="imp" :color="IMPORTANCE_COLOR[q.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[q.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge>
-        <Badge tone="cat" :color="CATEGORY_COLOR[q.category as keyof typeof CATEGORY_COLOR]">{{ q.category }}</Badge>
+        <span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in q.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span>
         <Badge v-if="q.mastered" tone="mastered"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l6 6L20 6" /></svg>Done</Badge>
       </div>
       <div class="stats">

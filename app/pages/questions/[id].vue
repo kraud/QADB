@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AttemptRow, QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL } from '#shared/enums'
+import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { fmtDT } from '~/utils/format'
 import { renderMarkdown } from '~/utils/markdown'
 
@@ -68,7 +68,7 @@ function practiceOne() {
         <div class="badge-row">
           <Badge tone="diff" :color="DIFFICULTY_COLOR[question.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[question.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge>
           <Badge tone="imp" :color="IMPORTANCE_COLOR[question.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[question.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge>
-          <Badge tone="cat" :color="CATEGORY_COLOR[question.category as keyof typeof CATEGORY_COLOR]">{{ question.category }}</Badge>
+          <span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in question.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span>
           <span class="mastered-ctl" :class="{ on: question.mastered === 1 }">
             <Switch
               :model-value="question.mastered === 1"

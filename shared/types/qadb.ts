@@ -12,7 +12,7 @@ export interface QuestionWithStats {
   answer_summary: string
   difficulty: string
   importance: string
-  category: string
+  category: string[]
   link: string | null
   mastered: number
   created_at: number

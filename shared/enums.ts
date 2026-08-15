@@ -10,7 +10,8 @@ export const CATEGORY = ['HTML', 'CSS', 'JS', 'API', 'React'] as const
 
 export const difficultySchema = z.enum(['easy', 'medium', 'hard'])
 export const importanceSchema = z.enum(['low', 'mid', 'high'])
-export const categorySchema = z.enum(['HTML', 'CSS', 'JS', 'API', 'React'])
+export const categoryValueSchema = z.enum(['HTML', 'CSS', 'JS', 'API', 'React'])
+export const categoriesSchema = z.array(categoryValueSchema).min(1)
 
 export type Difficulty = (typeof DIFFICULTY)[number]
 export type Importance = (typeof IMPORTANCE)[number]

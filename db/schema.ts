@@ -30,7 +30,6 @@ export const questions = sqliteTable(
   },
   (table) => [
     index('questions_user_id_idx').on(table.user_id),
-    index('questions_user_category_idx').on(table.user_id, table.category),
     index('questions_user_difficulty_idx').on(table.user_id, table.difficulty),
     index('questions_user_importance_idx').on(table.user_id, table.importance),
   ],

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { questions } from '../../../db/schema'
-import { categorySchema, difficultySchema, importanceSchema } from '#shared/enums'
+import { categoriesSchema, difficultySchema, importanceSchema } from '#shared/enums'
 import { mapQuestionRow, withQuestionStats } from '../../utils/questions'
 
 const bodySchema = z
@@ -10,7 +10,7 @@ const bodySchema = z
     answer_summary: z.string().trim().min(1).optional(),
     difficulty: difficultySchema.optional(),
     importance: importanceSchema.optional(),
-    category: categorySchema.optional(),
+    category: categoriesSchema.optional(),
     link: z.string().trim().max(2048).optional().nullable(),
     mastered: z.union([z.literal(0), z.literal(1)]).optional(),
   })
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
   if (data.answer_summary !== undefined) updates.answer_summary = data.answer_summary
   if (data.difficulty !== undefined) updates.difficulty = data.difficulty
   if (data.importance !== undefined) updates.importance = data.importance
-  if (data.category !== undefined) updates.category = data.category
+  if (data.category !== undefined) updates.category = JSON.stringify(data.category)
   if (data.link !== undefined) updates.link = data.link?.trim() ? data.link.trim() : null
   if (data.mastered !== undefined) updates.mastered = data.mastered
 
