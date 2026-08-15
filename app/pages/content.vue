@@ -24,6 +24,7 @@ const selection = ref<string[]>([])
 const followOrder = ref(true)
 const questions = ref<QuestionWithStats[]>([])
 const loading = ref(true)
+const loadError = ref(false)
 const hasLoaded = ref(false)
 const mobileFiltersOpen = ref(false)
 
@@ -81,14 +82,19 @@ function reAnchorSelection() {
     toast('Selection adjusted to the current results')
   }
 }
-
 async function fetchQuestions() {
   if (!hasLoaded.value) loading.value = true
-  const data = await api<QuestionWithStats[]>('/api/questions' + buildQuery())
-  questions.value = data
-  reAnchorSelection()
-  hasLoaded.value = true
-  loading.value = false
+  loadError.value = false
+  try {
+    const data = await api<QuestionWithStats[]>('/api/questions' + buildQuery())
+    questions.value = data
+    reAnchorSelection()
+    hasLoaded.value = true
+  } catch {
+    loadError.value = true
+  } finally {
+    loading.value = false
+  }
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -241,6 +247,13 @@ onMounted(fetchQuestions)
             </table>
           </div>
         </template>
+
+        <Empty v-else-if="loadError" title="Couldn't load your questions" text="Something went wrong fetching your question bank. Check your connection and try again.">
+          <template #icon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="9" /></svg>
+          </template>
+          <Btn variant="secondary" size="sm" @click="fetchQuestions">Try again</Btn>
+        </Empty>
 
         <template v-else-if="questions.length">
           <QuestionTable
