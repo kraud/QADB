@@ -493,6 +493,8 @@ p { text-wrap: pretty; }
 .answer-edit { display: flex; flex-direction: column; gap: 5px; }
 .answer-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .answer-field-head label { font-size: 12.5px; font-weight: 500; color: var(--fg); }
+.answer-actions { display: flex; align-items: center; gap: 8px; }
+.answer-edit .textarea { min-height: 220px; }
 .answer-preview {
   min-height: 88px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--surface); color: var(--fg); font-size: 14px; line-height: 1.55;
