@@ -1,6 +1,7 @@
 import type { SQL } from 'drizzle-orm'
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 import { questions } from '../../../db/schema'
+import { CATEGORY } from '#shared/enums'
 import { mapQuestionRow, withQuestionStats } from '../../utils/questions'
 
 function asStringArray(value: unknown): string[] {
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   const difficulty = asStringArray(query.difficulty)
   const importance = asStringArray(query.importance)
-  const category = asStringArray(query.category)
+  const category = asStringArray(query.category).filter((v) => (CATEGORY as readonly string[]).includes(v))
   const nbd = query.nbd === 'true' ? true : query.nbd === 'false' ? false : undefined
   const mastered = query.mastered === 'true' ? true : query.mastered === 'false' ? false : undefined
   const amountOp = query.amountOp === 'gt' || query.amountOp === 'lt' || query.amountOp === 'eq' ? query.amountOp : undefined
@@ -36,7 +37,11 @@ export default defineEventHandler(async (event) => {
   ]
   if (difficulty.length) conditions.push(inArray(questions.difficulty, difficulty))
   if (importance.length) conditions.push(inArray(questions.importance, importance))
-  if (category.length) conditions.push(inArray(questions.category, category))
+  if (category.length) {
+    conditions.push(
+      sql`exists (select 1 from json_each(${questions.category}) where json_each.value in (${sql.join(category.map((v) => sql`${v}`), sql`, `)}))`,
+    )
+  }
   if (nbd === true) conditions.push(isNull(stats.attemptCount))
   if (nbd === false) conditions.push(isNotNull(stats.attemptCount))
   if (mastered === true) conditions.push(eq(questions.mastered, 1))

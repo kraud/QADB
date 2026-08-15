@@ -188,6 +188,7 @@ p { text-wrap: pretty; }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .chip[data-variant] { border-color: color-mix(in oklch, var(--cv, var(--accent)) 30%, transparent); color: var(--cv, var(--muted)); }
 .chip[data-variant].on { background: color-mix(in oklch, var(--cv, var(--accent)) 14%, var(--surface)); border-color: var(--cv, var(--accent)); color: var(--cv, var(--accent)); }
+.chip:disabled, .chip.off { opacity: .5; cursor: not-allowed; }
 
 /* segmented (tri-state) */
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }

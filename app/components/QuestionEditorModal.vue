@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL } from '#shared/enums'
+import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { renderMarkdown } from '~/utils/markdown'
 
 const props = defineProps<{ open: boolean; questionId: string | null }>()
@@ -18,7 +18,7 @@ const answer = ref('')
 const answerMode = ref<'markdown' | 'display'>('markdown')
 const difficulty = ref('medium')
 const importance = ref('mid')
-const category = ref('JS')
+const categories = ref<string[]>(['JS'])
 const link = ref('')
 const mastered = ref(false)
 const saving = ref(false)
@@ -43,7 +43,7 @@ function reset() {
   answerMode.value = 'markdown'
   difficulty.value = 'medium'
   importance.value = 'mid'
-  category.value = 'JS'
+  categories.value = ['JS']
   link.value = ''
   mastered.value = false
   saving.value = false
@@ -67,7 +67,7 @@ watch(
         answer.value = q.answer_summary
         difficulty.value = q.difficulty
         importance.value = q.importance
-        category.value = q.category
+        categories.value = q.category.length ? q.category : ['JS']
         link.value = q.link ?? ''
         mastered.value = q.mastered === 1
       } catch {
@@ -105,7 +105,7 @@ async function save() {
     answer_summary: answer.value.trim(),
     difficulty: difficulty.value,
     importance: importance.value,
-    category: category.value,
+    category: categories.value,
     link: link.value.trim() || undefined,
   }
 
@@ -143,6 +143,14 @@ async function formatWithAi() {
     toast('Could not format. Try again.')
   } finally {
     formatting.value = false
+  }
+}
+
+function toggleCategory(c: Category) {
+  if (categories.value.includes(c)) {
+    if (categories.value.length > 1) categories.value = categories.value.filter((v) => v !== c)
+  } else {
+    categories.value = [...categories.value, c]
   }
 }
 
@@ -233,9 +241,10 @@ function requestDelete() {
               <Chip
                 v-for="c in CATEGORY"
                 :key="c"
-                :active="category === c"
+                :active="categories.includes(c)"
                 :color="CATEGORY_COLOR[c]"
-                @click="category = c"
+                :disabled="categories.length === 1 && categories.includes(c)"
+                @click="toggleCategory(c)"
               >
                 {{ c }}
               </Chip>

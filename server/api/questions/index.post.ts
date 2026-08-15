@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2'
 import { z } from 'zod'
 import { questions } from '../../../db/schema'
-import { categorySchema, difficultySchema, importanceSchema } from '#shared/enums'
+import { categoriesSchema, difficultySchema, importanceSchema } from '#shared/enums'
 import { mapQuestionRow } from '../../utils/questions'
 
 const bodySchema = z.object({
@@ -9,7 +9,7 @@ const bodySchema = z.object({
   answer_summary: z.string().trim().min(1),
   difficulty: difficultySchema,
   importance: importanceSchema,
-  category: categorySchema,
+  category: categoriesSchema,
   link: z.string().trim().max(2048).optional(),
 })
 
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     answer_summary: data.answer_summary,
     difficulty: data.difficulty,
     importance: data.importance,
-    category: data.category,
+    category: JSON.stringify(data.category),
     link,
     mastered: 0,
     created_at: now,
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     answer_summary: data.answer_summary,
     difficulty: data.difficulty,
     importance: data.importance,
-    category: data.category,
+    category: JSON.stringify(data.category),
     link,
     mastered: 0,
     created_at: now,
