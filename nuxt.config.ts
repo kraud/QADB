@@ -4,6 +4,15 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ['nuxt-auth-utils', '@pinia/nuxt'],
 
+  app: {
+    head: {
+      title: 'Q&A-DB',
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+      ],
+    },
+  },
+
   components: [
     { path: '~/components', pathPrefix: false },
   ],
