@@ -9,7 +9,8 @@ const bodySchema = z.object({
 // `reasoning_effort: "low"` is required: these reasoning models otherwise
 // stochastically burn the whole max_tokens budget on reasoning and return
 // empty content (finish_reason "length").
-const MODEL = 'deepseek-v4-flash'
+// const MODEL = 'deepseek-v4-flash'
+const MODEL = 'mimo-v2.5'
 
 function isCompletionResponse(value: unknown): value is { choices: { message: { content: string } }[] } {
   if (!value || typeof value !== 'object') return false
