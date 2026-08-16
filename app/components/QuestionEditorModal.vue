@@ -26,9 +26,16 @@ const formatting = ref(false)
 const loading = ref(false)
 const serverError = ref('')
 const fieldErrors = reactive({ question: '', answer_summary: '', link: '' })
+const initial = reactive({ question: '', answer: '', link: '' })
 
 const isEdit = computed(() => !!props.questionId)
 const title = computed(() => (isEdit.value ? 'Edit question' : 'Add question'))
+const hasUnsavedChanges = computed(
+  () =>
+    question.value.trim() !== initial.question ||
+    answer.value.trim() !== initial.answer ||
+    link.value.trim() !== initial.link,
+)
 
 const diffOptions = DIFFICULTY.map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
 const impOptions = IMPORTANCE.map((v) => ({ value: v, label: IMPORTANCE_LABEL[v] }))
@@ -59,6 +66,9 @@ watch(
   async (open) => {
     if (!open) return
     reset()
+    initial.question = ''
+    initial.answer = ''
+    initial.link = ''
     if (props.questionId) {
       loading.value = true
       try {
@@ -70,6 +80,9 @@ watch(
         categories.value = q.category.length ? q.category : ['JS']
         link.value = q.link ?? ''
         mastered.value = q.mastered === 1
+        initial.question = question.value.trim()
+        initial.answer = answer.value.trim()
+        initial.link = link.value.trim()
       } catch {
         serverError.value = 'Could not load this question.'
       } finally {
@@ -129,6 +142,25 @@ async function save() {
   }
 }
 
+const confirmDiscardOpen = ref(false)
+
+function attemptClose() {
+  if (hasUnsavedChanges.value) confirmDiscardOpen.value = true
+  else emit('close')
+}
+
+function discard() {
+  confirmDiscardOpen.value = false
+  emit('close')
+}
+
+watch(confirmDiscardOpen, (open) => {
+  if (open) return
+  nextTick(() => {
+    document.querySelector<HTMLElement>('.overlay')?.querySelector<HTMLElement>('input, textarea, select, button')?.focus()
+  })
+})
+
 async function formatWithAi() {
   if (!answer.value.trim() || formatting.value) return
   formatting.value = true
@@ -160,10 +192,10 @@ function requestDelete() {
 </script>
 
 <template>
-  <Modal :open="open" :aria-label="title" @close="emit('close')">
+  <Modal :open="open" :aria-label="title" @close="attemptClose">
     <div class="modal-head">
       <h2>{{ title }}</h2>
-      <button class="icon-btn" aria-label="Close" @click="emit('close')">
+      <button class="icon-btn" aria-label="Close" @click="attemptClose">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>
     </div>
@@ -272,9 +304,20 @@ function requestDelete() {
       </div>
 
       <div class="modal-foot">
-        <Btn variant="secondary" @click="emit('close')">Cancel</Btn>
+        <Btn variant="secondary" @click="attemptClose">Cancel</Btn>
         <Btn type="submit" :loading="saving">Save</Btn>
       </div>
     </form>
+  </Modal>
+
+  <Modal :open="confirmDiscardOpen" role="alertdialog" aria-label="Discard changes?" max-width="440px" @close="confirmDiscardOpen = false">
+    <div class="modal-head"><h2>Discard changes?</h2></div>
+    <div class="confirm-body">
+      <p>Your edits to this question will be lost.</p>
+    </div>
+    <div class="modal-foot" style="padding-top: 8px">
+      <Btn variant="secondary" @click="confirmDiscardOpen = false">Keep editing</Btn>
+      <Btn variant="error" @click="discard">Discard</Btn>
+    </div>
   </Modal>
 </template>
