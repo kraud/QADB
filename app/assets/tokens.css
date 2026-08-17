@@ -419,6 +419,22 @@ p { text-wrap: pretty; }
 .practice-track { margin-top: 18px; }
 .practice-track summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--muted); font-family: var(--font-mono); }
 .practice-track summary:hover { color: var(--fg); }
+.practice-meta {
+  margin-top: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+  padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius);
+  cursor: pointer; user-select: none;
+}
+.practice-meta:hover { border-color: color-mix(in oklch, var(--muted) 45%, var(--border)); }
+.practice-meta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.practice-meta.blurred .badge { filter: blur(5px); }
+@media (max-width: 720px) {
+  .practice-meta { flex-direction: column; align-items: stretch; }
+}
+.meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.meta-label { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--muted); }
+.meta-label:hover { color: var(--fg); }
+.meta-ic { width: 13px; height: 13px; color: var(--muted); }
+.meta-cats { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .practice-track .tr-table { margin-top: 10px; }
 .practice-track .track-mini { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .end-panel { text-align: center; padding: 40px 20px; }

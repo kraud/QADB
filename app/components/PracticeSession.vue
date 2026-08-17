@@ -121,6 +121,7 @@ onMounted(setup)
     </div>
 
     <PracticeCard
+      :key="question.id"
       :question="question"
       :index="store.index"
       :total="total"
