@@ -26,6 +26,7 @@
   --cat-js:    oklch(0.6 0.13 92);
   --cat-api:   oklch(0.53 0.14 295);
   --cat-react: oklch(0.52 0.13 168);
+  --cat-domain: oklch(0.55 0.15 355);
 
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
@@ -62,6 +63,7 @@
   --cat-js:    oklch(0.78 0.12 90);
   --cat-api:   oklch(0.72 0.12 295);
   --cat-react: oklch(0.73 0.12 170);
+  --cat-domain: oklch(0.75 0.13 355);
   --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 30px oklch(0 0 0 / 0.45);
 }
 

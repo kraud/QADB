@@ -6,11 +6,11 @@ export const DIFFICULTY_ORDER: Record<string, number> = { easy: 1, medium: 2, ha
 export const IMPORTANCE = ['low', 'mid', 'high'] as const
 export const IMPORTANCE_ORDER: Record<string, number> = { low: 1, mid: 2, high: 3 }
 
-export const CATEGORY = ['HTML', 'CSS', 'JS', 'API', 'React'] as const
+export const CATEGORY = ['HTML', 'CSS', 'JS', 'API', 'React', 'Domain'] as const
 
 export const difficultySchema = z.enum(['easy', 'medium', 'hard'])
 export const importanceSchema = z.enum(['low', 'mid', 'high'])
-export const categoryValueSchema = z.enum(['HTML', 'CSS', 'JS', 'API', 'React'])
+export const categoryValueSchema = z.enum(['HTML', 'CSS', 'JS', 'API', 'React', 'Domain'])
 export const categoriesSchema = z.array(categoryValueSchema).min(1)
 
 export type Difficulty = (typeof DIFFICULTY)[number]
@@ -36,4 +36,5 @@ export const CATEGORY_COLOR: Record<Category, string> = {
   JS: 'var(--cat-js)',
   API: 'var(--cat-api)',
   React: 'var(--cat-react)',
+  Domain: 'var(--cat-domain)',
 }
