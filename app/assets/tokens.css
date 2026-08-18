@@ -167,6 +167,7 @@ p { text-wrap: pretty; }
 .input:focus, .textarea:focus, .select:focus {
   outline: 2px solid var(--accent-soft); border-color: var(--accent); outline-offset: 0;
 }
+.input:disabled, .textarea:disabled, .select:disabled { opacity: .5; cursor: not-allowed; }
 .textarea { min-height: 88px; resize: vertical; line-height: 1.55; }
 .input-wrap { position: relative; display: flex; align-items: center; }
 .input-wrap .input { padding-right: 44px; }

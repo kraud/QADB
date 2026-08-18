@@ -23,7 +23,7 @@ const activeCount = computed(() => {
   if (props.filters.cat.length) n++
   if (props.filters.nbd !== 'all') n++
   if (props.filters.mastered !== 'all') n++
-  if (props.filters.op !== '>' || props.filters.n > 0) n++
+  if (props.filters.op !== 'all') n++
   if (props.filters.recent) n++
   if (props.filters.q.trim()) n++
   return n
@@ -57,7 +57,7 @@ function reset() {
   props.filters.cat = []
   props.filters.nbd = 'all'
   props.filters.mastered = 'all'
-  props.filters.op = '>'
+  props.filters.op = 'all'
   props.filters.n = 0
   props.filters.recent = false
   props.filters.q = ''
@@ -108,11 +108,12 @@ function reset() {
       <p class="filter-title">Track record amount</p>
       <div class="filter-row">
         <select class="select" aria-label="Operator" :value="filters.op" @change="onOpChange">
+          <option value="all">all</option>
           <option value=">">&gt;</option>
           <option value="<">&lt;</option>
           <option value="=">=</option>
         </select>
-        <input class="input num" type="number" min="0" step="1" :value="filters.n || ''" placeholder="0" aria-label="Practice count" @input="onAmountInput" />
+        <input class="input num" type="number" min="0" step="1" :value="filters.n || ''" placeholder="0" aria-label="Practice count" :disabled="filters.op === 'all'" @input="onAmountInput" />
       </div>
     </div>
 
