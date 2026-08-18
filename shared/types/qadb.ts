@@ -32,7 +32,7 @@ export interface Filters {
   cat: string[]
   nbd: 'all' | 'yes' | 'no'
   mastered: 'all' | 'yes' | 'no'
-  op: '>' | '<' | '='
+  op: 'all' | '>' | '<' | '='
   n: number
   recent: boolean
   q: string

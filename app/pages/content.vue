@@ -12,7 +12,7 @@ const filters = reactive<Filters>({
   cat: [],
   nbd: 'all',
   mastered: 'all',
-  op: '>',
+  op: 'all',
   n: 0,
   recent: false,
   q: '',
@@ -41,7 +41,7 @@ const activeCount = computed(() => {
   if (filters.cat.length) n++
   if (filters.nbd !== 'all') n++
   if (filters.mastered !== 'all') n++
-  if (filters.op !== '>' || filters.n > 0) n++
+  if (filters.op !== 'all') n++
   if (filters.recent) n++
   if (filters.q.trim()) n++
   return n
@@ -56,8 +56,11 @@ function buildQuery(): string {
   for (const v of filters.cat) qs.append('category', v)
   if (filters.nbd !== 'all') qs.set('nbd', filters.nbd === 'yes' ? 'true' : 'false')
   if (filters.mastered !== 'all') qs.set('mastered', filters.mastered === 'yes' ? 'true' : 'false')
-  if (filters.n > 0) {
-    qs.set('amountOp', filters.op)
+  // API contract: amountOp is gt|lt|eq (index.get.ts); UI uses the symbol form.
+  // 'all' (default) = inactive, no params sent. `>` + 0 = gt 0 → excludes never-practiced.
+  if (filters.op !== 'all') {
+    const opMap: Record<Exclude<Filters['op'], 'all'>, string> = { '>': 'gt', '<': 'lt', '=': 'eq' }
+    qs.set('amountOp', opMap[filters.op])
     qs.set('amountValue', String(filters.n))
   }
   if (filters.recent) qs.set('recentlyFailed', 'true')
