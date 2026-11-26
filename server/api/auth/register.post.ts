@@ -9,6 +9,10 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  if (useRuntimeConfig(event).public.registrationOpen !== true) {
+    throw createError({ statusCode: 403, statusMessage: 'Registration is closed' })
+  }
+
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({

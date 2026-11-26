@@ -10,7 +10,7 @@ own **attributes** and **options**, and practices the questions while the app ke
 
 | Tool | Notes |
 |---|---|
-| Node.js 24 | The database scripts import TypeScript files directly and use `node:sqlite`. |
+| Node.js 24.15 or newer | The database scripts import TypeScript files directly and use `node:sqlite`. |
 | pnpm 11 | Installed here as `/opt/homebrew/bin/pnpm`. pnpm 9 fails on `pnpm-workspace.yaml`; check with `pnpm -v` and use the full path if an older one comes first. |
 | `sqld` | The libSQL server, for the local database and the tests: `brew tap libsql/sqld && brew install sqld`. |
 | `sqlite3` | Only for restoring a backup. |
@@ -43,7 +43,14 @@ NUXT_TURSO_URL=http://127.0.0.1:8080 pnpm db:migrate
 pnpm dev
 ```
 
-A new database has no accounts: register one in the app.
+A new database has no accounts: set `NUXT_PUBLIC_REGISTRATION_OPEN=true` in `.env`, restart the app
+and register one.
+
+### Registration
+
+Registration is closed unless `NUXT_PUBLIC_REGISTRATION_OPEN` is `true`, locally and in a deployment.
+While closed, the login page has no register link, `/register` redirects to the login page and the
+registration API answers 403. Existing accounts keep working.
 
 ### Migrations
 
@@ -89,12 +96,14 @@ It gives an existing account two scenarios with invented questions and track rec
 ## Tests
 
 ```sh
-pnpm typecheck
+pnpm typecheck        # the app and the tests
 pnpm test             # unit and API tests (Vitest)
 pnpm test:coverage    # the same, failing below 90 % line coverage
 pnpm test:e2e         # end-to-end tests (Playwright)
 ```
 
+- GitHub Actions runs the type check, coverage and end-to-end tests on every pull request and on
+  `main` (`.github/workflows/ci.yml`).
 - Coverage is measured over server code, shared code, utilities and stores. Pages and components are
   covered by the end-to-end tests.
 - Selects, dialogs, switches and similar are [Reka UI](https://reka-ui.com) controls: tests operate

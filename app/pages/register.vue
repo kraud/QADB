@@ -1,5 +1,10 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'auth' })
+definePageMeta({
+  layout: 'auth',
+  middleware: () => {
+    if (!useRuntimeConfig().public.registrationOpen) return navigateTo('/login', { redirectCode: 302 })
+  },
+})
 
 const { fetch: fetchSession } = useUserSession()
 const practice = usePracticeStore()

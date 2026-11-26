@@ -26,7 +26,13 @@ export default defineNuxtConfig({
     // Chat completions endpoint behind "Format with AI"; override with NUXT_OPENCODE_URL.
     opencodeUrl: 'https://opencode.ai/zen/go/v1/chat/completions',
     sessionPassword: '',
+    public: {
+      // Closed unless NUXT_PUBLIC_REGISTRATION_OPEN=true. Public, as the login page reads it too.
+      registrationOpen: false,
+    },
     session: {
+      // nuxt-auth-utils' own default; the type requires it. NUXT_SESSION_PASSWORD sets the value.
+      password: '',
       cookie: {
         // h3 defaults cookies to `secure: true`, which browsers reject over http://localhost in dev.
         secure: process.env.NODE_ENV === 'production',

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { updateScenario } from '../../../services/scenarios'
 
 const resolutionsSchema = z.object({
-  removedOptions: z.record(z.object({ moveTo: z.string().min(1).nullable() })).optional(),
+  removedOptions: z.record(z.string(), z.object({ moveTo: z.string().min(1).nullable() })).optional(),
   removedAttributes: z.array(z.string()).optional(),
   collapseToSingle: z.array(z.string()).optional(),
 })

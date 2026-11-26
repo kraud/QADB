@@ -640,7 +640,7 @@ describe('atomicity', () => {
         raced = await stored()
       }
       return batch(statements)
-    }) as typeof api.db.batch)
+    }) as unknown as typeof api.db.batch)
 
     const res = await put(alice, scenario.id, body)
 

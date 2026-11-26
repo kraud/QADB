@@ -60,6 +60,29 @@ describe('register', () => {
   })
 })
 
+describe('closed registration', () => {
+  it.each([
+    ['a valid request', 'newcomer', PASSWORD],
+    ['an invalid one', 'ab', 'short'],
+  ])('refuses %s without creating an account', async (_name, username, password) => {
+    api.config.public.registrationOpen = false
+
+    const res = await register(username, password)
+
+    expect(res.status).toBe(403)
+    expect(res.data.statusMessage).toBe('Registration is closed')
+    expect(res.session).toBeUndefined()
+    expect(await storedUsers()).toEqual([])
+  })
+
+  it('still lets an existing account log in', async () => {
+    await register('returning')
+    api.config.public.registrationOpen = false
+
+    expect((await login('returning', PASSWORD)).status).toBe(200)
+  })
+})
+
 describe('login', () => {
   it('signs the user in with the right password', async () => {
     const { data: user } = await register('returning')

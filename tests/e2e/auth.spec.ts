@@ -45,6 +45,29 @@ test('register validates fields', async ({ page }) => {
   await expect(page).toHaveURL('/register')
 })
 
+test('closed registration offers no sign-up', async ({ page }, testInfo) => {
+  const { closedAppUrl } = testInfo.config.metadata as { closedAppUrl: string }
+
+  await visit(page, `${closedAppUrl}/login`)
+  await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Register' })).toHaveCount(0)
+
+  await visit(page, `${closedAppUrl}/register`)
+  await expect(page).toHaveURL(`${closedAppUrl}/login`)
+
+  const refused = await page.request.post(`${closedAppUrl}/api/auth/register`, {
+    data: { username: `new_${Date.now()}`, password: 'a-long-enough-password' },
+  })
+  expect(refused.status()).toBe(403)
+})
+
+test('open registration is offered on the login page', async ({ page }) => {
+  await visit(page, '/login')
+  await page.getByRole('link', { name: 'Register' }).click()
+
+  await expect(page).toHaveURL('/register')
+})
+
 test('login with wrong password', async ({ page }) => {
   await signIn(page, { username: user.username, password: `${user.password}-wrong` })
 

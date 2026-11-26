@@ -104,7 +104,7 @@ const FIELD = /^(name|attributes\.\d+\.(name|options|options\.\d+\.label))$/
  * Sorts validation issues, from the schema or from the server, into one message per field of the
  * form and the messages no field shows.
  */
-export function fieldErrors(issues: { path?: (string | number)[]; message: string }[]) {
+export function fieldErrors(issues: { path?: PropertyKey[]; message: string }[]) {
   const fields: Record<string, string> = {}
   const other: string[] = []
   for (const { path = [], message } of issues) {
