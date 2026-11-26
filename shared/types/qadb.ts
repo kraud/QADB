@@ -1,4 +1,4 @@
-import type { AttributeValues } from '../scenario/types'
+import type { AttributeValues, Scenario, Usage } from '../scenario/types'
 
 export interface QuestionStats {
   attemptCount: number
@@ -30,16 +30,12 @@ export interface AttemptRow {
   answered_at: number
 }
 
-export interface Filters {
-  diff: string[]
-  imp: string[]
-  cat: string[]
-  nbd: 'all' | 'yes' | 'no'
-  mastered: 'all' | 'yes' | 'no'
-  op: 'all' | '>' | '<' | '='
-  n: number
-  recent: boolean
-  q: string
+export interface ScenarioSummary {
+  id: string
+  name: string
+  questionCount: number
+  incompleteCount: number
 }
 
-export type SortKey = '' | 'difficulty' | 'importance' | 'pct' | 'amount'
+/** A scenario as read on its own: its definition with usage and counts. */
+export type ScenarioDetail = Scenario & { usage: Usage; questionCount: number; incompleteCount: number }

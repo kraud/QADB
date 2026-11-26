@@ -2,7 +2,7 @@
 const props = defineProps<{ error: { statusCode?: number } }>()
 
 function handleError() {
-  clearError({ redirect: '/content' })
+  clearError({ redirect: '/' })
 }
 </script>
 

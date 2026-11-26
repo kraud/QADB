@@ -1,9 +1,14 @@
 <script setup lang="ts">
-defineProps<{ sortKey: string; sortDir: string }>()
+import type { SortDir, SortKey } from '#shared/scenario/query'
+import type { Attribute } from '#shared/scenario/types'
+
+const props = defineProps<{ sortKey: SortKey; sortDir: SortDir; attributes: Attribute[] }>()
 const emit = defineEmits<{
-  (e: 'update:sortKey', v: string): void
-  (e: 'update:sortDir', v: string): void
+  (e: 'update:sortKey', v: SortKey): void
+  (e: 'update:sortDir', v: SortDir): void
 }>()
+
+const ordered = computed(() => props.attributes.filter((attribute) => attribute.ordered))
 </script>
 
 <template>
@@ -12,11 +17,10 @@ const emit = defineEmits<{
       class="select"
       aria-label="Sort by"
       :value="sortKey"
-      @change="emit('update:sortKey', ($event.target as HTMLSelectElement).value)"
+      @change="emit('update:sortKey', ($event.target as HTMLSelectElement).value as SortKey)"
     >
       <option value="">Sort by · Default</option>
-      <option value="difficulty">Difficulty</option>
-      <option value="importance">Importance</option>
+      <option v-for="attribute in ordered" :key="attribute.id" :value="`attr:${attribute.id}`">{{ attribute.name }}</option>
       <option value="pct">Track record %</option>
       <option value="amount">Track record amount</option>
     </select>

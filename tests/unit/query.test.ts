@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildQuestionQuery, countActiveFilters, emptyFilters, parseQuestionQuery } from '../../shared/scenario/query'
 import type { Filters, SortKey } from '../../shared/scenario/query'
+import type { Attribute, Scenario } from '../../shared/scenario/types'
 
 /** A query string as the router and the server see it: one value is a string, several are an array. */
 function toObject(query: string): Record<string, string | string[]> {
@@ -10,6 +11,25 @@ function toObject(query: string): Record<string, string | string[]> {
     return [key, all.length > 1 ? all : all[0]!]
   }))
 }
+
+const attribute = (id: string, optionIds: string[]): Attribute => ({
+  id,
+  name: id,
+  selectionMode: 'multiple',
+  ordered: false,
+  required: false,
+  position: 0,
+  options: optionIds.map((optionId, position) => ({
+    id: optionId,
+    label: optionId,
+    color: 'green',
+    position,
+    isDefault: false,
+  })),
+})
+
+/** Attribute a1 holds options o1 and o2, attribute a2 holds o3. */
+const scenario: Scenario = { id: 's', name: 'S', attributes: [attribute('a1', ['o1', 'o2']), attribute('a2', ['o3'])] }
 
 const full: Filters = {
   options: ['o1', 'o2'],
@@ -29,7 +49,7 @@ describe('query', () => {
       options: [], none: [], incomplete: false, nbd: 'all', mastered: 'all', op: 'all', n: 0, recent: false, q: '',
     })
     expect(emptyFilters().options).not.toBe(emptyFilters().options)
-    expect(countActiveFilters(emptyFilters())).toBe(0)
+    expect(countActiveFilters(emptyFilters(), scenario)).toBe(0)
   })
 
   it('buildQuestionQuery is empty for the defaults', () => {
@@ -106,9 +126,21 @@ describe('query', () => {
     expect(filters).toMatchObject({ options: ['o1', 'o2'], none: ['a1'], q: 'two words' })
   })
 
-  it('countActiveFilters counts each chip and each other active filter', () => {
-    expect(countActiveFilters({ ...emptyFilters(), options: ['o1', 'o2'], none: ['a1'] })).toBe(3)
-    expect(countActiveFilters(full)).toBe(9)
-    expect(countActiveFilters({ ...emptyFilters(), n: 5, q: '  ' })).toBe(0)
+  it('countActiveFilters counts one per attribute with a chosen chip', () => {
+    // Two options and "None" of the same attribute are one filter.
+    expect(countActiveFilters({ ...emptyFilters(), options: ['o1', 'o2'], none: ['a1'] }, scenario)).toBe(1)
+    expect(countActiveFilters({ ...emptyFilters(), options: ['o1', 'o3'] }, scenario)).toBe(2)
+    expect(countActiveFilters({ ...emptyFilters(), none: ['a1', 'a2'] }, scenario)).toBe(2)
+    expect(countActiveFilters({ ...emptyFilters(), options: ['o3'], none: ['a1'] }, scenario)).toBe(2)
+  })
+
+  it('countActiveFilters ignores ids that are not in the scenario', () => {
+    expect(countActiveFilters({ ...emptyFilters(), options: ['gone'], none: ['gone'] }, scenario)).toBe(0)
+  })
+
+  it('countActiveFilters counts each other active filter once', () => {
+    // Both attributes, plus incomplete, never done, mastered, amount, recently failed and search.
+    expect(countActiveFilters({ ...full, options: ['o1', 'o2', 'o3'] }, scenario)).toBe(8)
+    expect(countActiveFilters({ ...emptyFilters(), n: 5, q: '  ' }, scenario)).toBe(0)
   })
 })

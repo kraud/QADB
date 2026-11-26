@@ -1,7 +1,7 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    tone?: 'diff' | 'imp' | 'cat' | 'mastered' | 'neutral'
+    tone?: 'option' | 'mastered' | 'neutral'
     color?: string
   }>(),
   { tone: 'neutral' },

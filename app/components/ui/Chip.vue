@@ -10,6 +10,7 @@ defineEmits<{ (e: 'click'): void }>()
     :class="{ on: active, off: disabled }"
     :disabled="disabled"
     :aria-disabled="disabled"
+    :aria-pressed="active"
     :style="color ? { '--cv': color } : undefined"
     @click="$emit('click')"
   >

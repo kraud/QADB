@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import type { Filters, QuestionWithStats, SortKey } from '#shared/types/qadb'
+import { buildQuestionQuery, countActiveFilters, emptyFilters, type Filters, type SortDir, type SortKey } from '#shared/scenario/query'
+import type { QuestionWithStats } from '#shared/types/qadb'
+import { practicePath, questionPath } from '~/utils/scenario-route'
 import { shuffle } from '~/utils/shuffle'
+
+// One page instance per scenario: switching starts with fresh filters, sort, selection and results.
+definePageMeta({ key: (route) => String(route.params.sid) })
+
+const route = useRoute()
+const sid = String(route.params.sid)
 
 const api = useApi()
 const { toast } = useToast()
 const practice = usePracticeStore()
+const {
+  scenario,
+  error: scenarioError,
+  refresh: refreshScenario,
+} = useScenario(computed(() => sid))
 
-const filters = reactive<Filters>({
-  diff: [],
-  imp: [],
-  cat: [],
-  nbd: 'all',
-  mastered: 'all',
-  op: 'all',
-  n: 0,
-  recent: false,
-  q: '',
-})
+const filters = reactive<Filters>(emptyFilters())
 
 const sortKey = ref<SortKey>('')
-const sortDir = ref<'asc' | 'desc'>('asc')
+const sortDir = ref<SortDir>('asc')
 const selection = ref<string[]>([])
 const followOrder = ref(true)
 const questions = ref<QuestionWithStats[]>([])
@@ -34,42 +37,11 @@ const confirmOpen = ref(false)
 const deletingId = ref<string | null>(null)
 const deletingAttemptCount = ref(0)
 
-const activeCount = computed(() => {
-  let n = 0
-  if (filters.diff.length) n++
-  if (filters.imp.length) n++
-  if (filters.cat.length) n++
-  if (filters.nbd !== 'all') n++
-  if (filters.mastered !== 'all') n++
-  if (filters.op !== 'all') n++
-  if (filters.recent) n++
-  if (filters.q.trim()) n++
-  return n
-})
+/** Missing, or someone else's. */
+const notFound = computed(() => scenarioError.value?.statusCode === 404)
 
+const activeCount = computed(() => (scenario.value ? countActiveFilters(filters, scenario.value) : 0))
 const hasActiveFilters = computed(() => activeCount.value > 0)
-
-function buildQuery(): string {
-  const qs = new URLSearchParams()
-  for (const v of filters.diff) qs.append('difficulty', v)
-  for (const v of filters.imp) qs.append('importance', v)
-  for (const v of filters.cat) qs.append('category', v)
-  if (filters.nbd !== 'all') qs.set('nbd', filters.nbd === 'yes' ? 'true' : 'false')
-  if (filters.mastered !== 'all') qs.set('mastered', filters.mastered === 'yes' ? 'true' : 'false')
-  // API contract: amountOp is gt|lt|eq (index.get.ts); UI uses the symbol form.
-  // 'all' (default) = inactive, no params sent. `>` + 0 = gt 0 → excludes never-practiced.
-  if (filters.op !== 'all') {
-    const opMap: Record<Exclude<Filters['op'], 'all'>, string> = { '>': 'gt', '<': 'lt', '=': 'eq' }
-    qs.set('amountOp', opMap[filters.op])
-    qs.set('amountValue', String(filters.n))
-  }
-  if (filters.recent) qs.set('recentlyFailed', 'true')
-  if (filters.q.trim()) qs.set('q', filters.q.trim())
-  if (sortKey.value) qs.set('sortKey', sortKey.value)
-  if (sortDir.value !== 'asc') qs.set('sortDir', sortDir.value)
-  const s = qs.toString()
-  return s ? `?${s}` : ''
-}
 
 function orderSelection() {
   const order = questions.value.map((q) => q.id)
@@ -85,19 +57,36 @@ function reAnchorSelection() {
     toast('Selection adjusted to the current results')
   }
 }
+
+/** Counts the list requests; only the answer to the newest one is used. */
+let latestRequest = 0
+let left = false
+
 async function fetchQuestions() {
+  if (left) return
+  const request = ++latestRequest
   if (!hasLoaded.value) loading.value = true
   loadError.value = false
   try {
-    const data = await api<QuestionWithStats[]>('/api/questions' + buildQuery())
+    const query = buildQuestionQuery(filters, sortKey.value, sortDir.value)
+    const data = await api<QuestionWithStats[]>(`/api/scenarios/${encodeURIComponent(sid)}/questions${query}`)
+    if (request !== latestRequest) return
     questions.value = data
     reAnchorSelection()
     hasLoaded.value = true
-  } catch {
+  } catch (err) {
+    if (request !== latestRequest) return
     loadError.value = true
-  } finally {
-    loading.value = false
+    // Deleted since it was opened: reading it again shows the 404 panel.
+    if ((err as { statusCode?: number }).statusCode === 404 && scenario.value) refreshScenario()
   }
+  loading.value = false
+}
+
+/** Reloads whatever failed: the scenario, the list, or both. */
+async function retry() {
+  if (!scenario.value) await refreshScenario()
+  await fetchQuestions()
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -106,19 +95,15 @@ function onSearchInput(e: Event) {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(fetchQuestions, 250)
 }
-onBeforeUnmount(() => clearTimeout(searchTimer))
+onBeforeUnmount(() => {
+  left = true
+  latestRequest++
+  clearTimeout(searchTimer)
+})
 
 function resetFilters() {
   clearTimeout(searchTimer)
-  filters.diff = []
-  filters.imp = []
-  filters.cat = []
-  filters.nbd = 'all'
-  filters.mastered = 'all'
-  filters.op = 'all'
-  filters.n = 0
-  filters.recent = false
-  filters.q = ''
+  Object.assign(filters, emptyFilters())
   fetchQuestions()
 }
 
@@ -141,13 +126,13 @@ function selectAll(checked: boolean) {
 }
 
 function openQuestion(id: string) {
-  navigateTo(`/questions/${id}`)
+  navigateTo(questionPath(sid, id))
 }
 
 function startPractice() {
   const queue = followOrder.value ? [...selection.value] : shuffle(selection.value)
   practice.start('curated', queue)
-  navigateTo('/practice')
+  navigateTo(practicePath(sid))
 }
 
 function addQuestion() {
@@ -194,25 +179,35 @@ onMounted(fetchQuestions)
 </script>
 
 <template>
-  <div class="content-wrap">
+  <div v-if="notFound" class="notfound">
+    <p class="code">404 · PAGE NOT FOUND</p>
+    <h1>This page doesn't exist.</h1>
+    <p>The link may be broken, or the page moved.</p>
+    <Btn to="/">Back to content</Btn>
+  </div>
+
+  <div v-else class="content-wrap">
     <div class="content-head">
       <div>
         <h1>Content</h1>
         <p class="sub">Your question bank — filter, sort, select, then practice.</p>
       </div>
-      <Btn variant="secondary" @click="addQuestion">
+      <Btn variant="secondary" :disabled="!scenario" @click="addQuestion">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="width: 14px; height: 14px"><path d="M12 5v14M5 12h14" /></svg>
         Add question
       </Btn>
     </div>
 
-    <button class="btn btn-secondary mobile-filters-btn" @click="mobileFiltersOpen = !mobileFiltersOpen">
+    <button type="button" class="btn btn-secondary mobile-filters-btn" @click="mobileFiltersOpen = !mobileFiltersOpen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="width: 14px; height: 14px"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
       Filters <span v-if="activeCount">· {{ activeCount }} active</span>
     </button>
 
     <div class="content-grid">
-      <FiltersPanel :filters="filters" :open="mobileFiltersOpen" @change="fetchQuestions" @reset="resetFilters" />
+      <FiltersPanel v-if="scenario" :scenario="scenario" :filters="filters" :open="mobileFiltersOpen" @change="fetchQuestions" @reset="resetFilters" />
+      <aside v-else class="filters" :class="{ open: mobileFiltersOpen }" aria-label="Filters">
+        <Skeleton v-for="i in 4" :key="i" height="46px" style="margin-bottom: 12px" />
+      </aside>
 
       <div>
         <div class="list-top">
@@ -221,7 +216,7 @@ onMounted(fetchQuestions)
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
               <input class="input" type="search" :value="filters.q" placeholder="Search questions" aria-label="Search questions" @input="onSearchInput" />
             </div>
-            <SortControl v-model:sort-key="sortKey" v-model:sort-dir="sortDir" />
+            <SortControl v-model:sort-key="sortKey" v-model:sort-dir="sortDir" :attributes="scenario?.attributes ?? []" />
           </div>
           <div v-if="selection.length" class="selection-bar">
             <span class="count">{{ selection.length }} selected</span>
@@ -231,16 +226,21 @@ onMounted(fetchQuestions)
         </div>
 
 
-        <template v-if="loading">
+        <Empty v-if="loadError || (scenarioError && !scenario)" title="Couldn't load your questions" text="Something went wrong fetching your question bank. Check your connection and try again.">
+          <template #icon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="9" /></svg>
+          </template>
+          <Btn variant="secondary" size="sm" @click="retry">Try again</Btn>
+        </Empty>
+
+        <template v-else-if="loading || !scenario">
           <div class="table-wrap">
             <table class="qtable sk-table">
               <tbody>
                 <tr v-for="i in 8" :key="i">
                   <td class="col-check"><Skeleton width="18px" height="18px" /></td>
                   <td class="col-q"><Skeleton :width="`${72 - i * 3}%`" /></td>
-                  <td><Skeleton width="56px" height="20px" radius="999px" /></td>
-                  <td><Skeleton width="48px" height="20px" radius="999px" /></td>
-                  <td><Skeleton width="42px" height="20px" radius="999px" /></td>
+                  <td v-for="n in scenario?.attributes.length ?? 3" :key="n"><Skeleton width="48px" height="20px" radius="999px" /></td>
                   <td class="col-num"><Skeleton width="34px" /></td>
                   <td class="col-num"><Skeleton width="46px" /></td>
                   <td class="col-num"><Skeleton width="60px" /></td>
@@ -251,15 +251,9 @@ onMounted(fetchQuestions)
           </div>
         </template>
 
-        <Empty v-else-if="loadError" title="Couldn't load your questions" text="Something went wrong fetching your question bank. Check your connection and try again.">
-          <template #icon>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="9" /></svg>
-          </template>
-          <Btn variant="secondary" size="sm" @click="fetchQuestions">Try again</Btn>
-        </Empty>
-
         <template v-else-if="questions.length">
           <QuestionTable
+            :scenario="scenario"
             :questions="questions"
             :selection="selection"
             @open="openQuestion"

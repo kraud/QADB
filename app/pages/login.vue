@@ -34,7 +34,7 @@ async function submit() {
     })
     await fetchSession()
     practice.clear()
-    await navigateTo('/content')
+    await navigateTo('/')
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode
     error.value = status === 401 ? 'Invalid credentials' : 'Something went wrong. Please try again.'
@@ -49,7 +49,7 @@ async function submit() {
     <div class="auth-head">
       <div class="brand">QADB<span class="dot">.</span></div>
       <h1>Log in</h1>
-      <p>Your frontend interview question bank</p>
+      <p>Your personal question bank</p>
     </div>
 
     <div v-if="notice" class="alert alert-info" style="margin-bottom: 14px">

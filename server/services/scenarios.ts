@@ -4,16 +4,10 @@ import { createError } from 'h3'
 import { diffScenario, findConflicts, type Conflict, type Resolutions } from '../../shared/scenario/diff'
 import { nameKey, type ScenarioInput } from '../../shared/scenario/schema'
 import type { Scenario, Usage } from '../../shared/scenario/types'
+import type { ScenarioDetail, ScenarioSummary } from '../../shared/types/qadb'
 import { attributes, options, questionOptions, questions, scenarios } from '../../db/schema'
 import type { Db } from '../utils/db'
 import { isIncomplete } from './incomplete'
-
-export interface ScenarioSummary {
-  id: string
-  name: string
-  questionCount: number
-  incompleteCount: number
-}
 
 const notFound = () => createError({ statusCode: 404, statusMessage: 'Not found' })
 
@@ -127,11 +121,7 @@ async function usageOf(db: Db, scenario: Scenario): Promise<Usage> {
   return usage
 }
 
-export async function getScenario(
-  db: Db,
-  userId: string,
-  sid: string,
-): Promise<Scenario & { usage: Usage; questionCount: number; incompleteCount: number }> {
+export async function getScenario(db: Db, userId: string, sid: string): Promise<ScenarioDetail> {
   const scenario = await requireScenario(db, userId, sid)
   const [usage, [summary]] = await Promise.all([usageOf(db, scenario), summaries(db, userId, sid)])
   // Deleted since it was read.

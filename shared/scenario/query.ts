@@ -1,3 +1,5 @@
+import type { Scenario } from './types'
+
 export type SortKey = '' | 'pct' | 'amount' | `attr:${string}`
 export type SortDir = 'asc' | 'desc'
 
@@ -96,8 +98,14 @@ export function parseQuestionQuery(raw: Record<string, unknown>): { filters: Fil
   }
 }
 
-/** How many filters are in effect: each chosen chip counts once, as does each other filter. */
-export function countActiveFilters(f: Filters): number {
+/**
+ * How many filters are in effect: one per attribute with any chip (options, "None") chosen, plus
+ * one for each other filter. Ids that are not in the scenario count for nothing.
+ */
+export function countActiveFilters(f: Filters, scenario: Pick<Scenario, 'attributes'>): number {
+  const attributes = scenario.attributes.filter(
+    (attribute) => f.none.includes(attribute.id) || attribute.options.some((option) => f.options.includes(option.id)),
+  )
   const others = [f.incomplete, f.nbd !== 'all', f.mastered !== 'all', f.op !== 'all', f.recent, f.q.trim() !== '']
-  return f.options.length + f.none.length + others.filter(Boolean).length
+  return attributes.length + others.filter(Boolean).length
 }
