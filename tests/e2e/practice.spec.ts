@@ -32,7 +32,7 @@ test('curated practice follows table order when the switch is on', async ({ page
   await expect(listedQuestions(page)).toHaveText([SECOND, THIRD, FIRST])
 
   // Picked in neither table nor creation order.
-  await startSelectedPractice(page, [FIRST, SECOND, THIRD], true)
+  await startSelectedPractice(page, [THIRD, FIRST, SECOND], true)
 
   await expect(page).toHaveURL('/practice')
   await expect(page.getByText('Practice — 3 questions selected')).toBeVisible()

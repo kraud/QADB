@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   chooseAmountOperator,
   chooseFilterOption,
+  filtersPanel,
   listedQuestions,
   openContent,
   resetFilters,
@@ -13,7 +14,7 @@ import {
   toggleRecentlyFailed,
   toggleSortDirection,
 } from '../flows/questions'
-import { resetUserData, seedQuestions, type SeedQuestion } from '../support/reset'
+import { recordAttempt, resetUserData, seedQuestions, type SeedQuestion } from '../support/reset'
 
 const ALPHA = 'Alpha: what is a closure?'
 const BETA = 'Beta: how does flexbox work?'
@@ -34,9 +35,10 @@ const BANK: SeedQuestion[] = [
 
 /** Seeds the standard bank and opens the list with every question showing. */
 async function openBank(page: Page) {
-  await seedQuestions(page.request, BANK)
+  const ids = await seedQuestions(page.request, BANK)
   await openContent(page)
   await expect(listedQuestions(page)).toHaveText(ALL)
+  return ids
 }
 
 test.beforeEach(async ({ page }) => {
@@ -52,7 +54,7 @@ test('empty bank shows "No questions yet"', async ({ page }) => {
 })
 
 test('each filter narrows the list', async ({ page }) => {
-  await openBank(page)
+  const [, , gammaId] = await openBank(page)
   const list = listedQuestions(page)
 
   await test.step('difficulty', async () => {
@@ -118,8 +120,10 @@ test('each filter narrows the list', async ({ page }) => {
   })
 
   await test.step('recently failed', async () => {
+    // Gamma has failed before, but its last attempt is now correct.
+    await recordAttempt(page.request, gammaId!, true)
     await toggleRecentlyFailed(page)
-    await expect(list).toHaveText([ALPHA, GAMMA])
+    await expect(list).toHaveText([ALPHA])
     await toggleRecentlyFailed(page)
     await expect(list).toHaveText(ALL)
   })
@@ -149,13 +153,21 @@ test('search matches every word', async ({ page }) => {
   const loop = 'How does the event loop work?'
   const delegation = 'What is event delegation?'
   const box = 'Explain the CSS box model'
-  await seedQuestions(page.request, [{ question: loop }, { question: delegation }, { question: box }])
+  await seedQuestions(page.request, [
+    { question: loop, answer: 'It runs queued callbacks one at a time.' },
+    { question: delegation },
+    { question: box },
+  ])
   await openContent(page)
   const list = listedQuestions(page)
   await expect(list).toHaveText([loop, delegation, box])
 
   await search(page, 'event')
   await expect(list).toHaveText([loop, delegation])
+
+  await search(page, 'callbacks') // only in an answer, and only question text is searched
+  await expect(page.getByRole('heading', { name: 'No questions match these filters' })).toBeVisible()
+  await expect(list).toHaveCount(0)
 
   await search(page, 'LOOP even') // any order, any case, parts of words
   await expect(list).toHaveText([loop])
@@ -217,11 +229,24 @@ test('no matches shows "No questions match these filters"', async ({ page }) => 
 
 test('Reset filters shows every question again, including never practiced ones', async ({ page }) => {
   await openBank(page)
+  const searchBox = page.getByRole('searchbox', { name: 'Search questions' })
+  // One of every filter, all of them matching Gamma.
+  await search(page, 'semantic')
   await toggleFilterChip(page, 'Hard')
+  await toggleFilterChip(page, 'Mid')
+  await toggleFilterChip(page, 'HTML')
+  await chooseFilterOption(page, 'Never been done', 'No')
+  await chooseFilterOption(page, 'Mastered', 'No')
+  await chooseAmountOperator(page, '>')
+  await setPracticeCount(page, 1)
+  await toggleRecentlyFailed(page)
+  await expect(filtersPanel(page).getByText('8 active')).toBeVisible()
   await expect(listedQuestions(page)).toHaveText([GAMMA])
 
   await resetFilters(page)
 
   await expect(listedQuestions(page)).toHaveText(ALL)
+  await expect(searchBox).toHaveValue('')
+  await expect(filtersPanel(page).getByText('0 active')).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Operator' })).toHaveValue('all')
 })

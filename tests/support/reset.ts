@@ -9,6 +9,7 @@ export interface SeedQuestion {
   difficulty?: 'easy' | 'medium' | 'hard'
   importance?: 'low' | 'mid' | 'high'
   categories?: string[]
+  link?: string
   mastered?: boolean
   /** Results to record, oldest first. */
   attempts?: boolean[]
@@ -34,6 +35,12 @@ export async function resetUserData(request: APIRequestContext) {
   }
 }
 
+/** Records one result, newer than every earlier one. */
+export async function recordAttempt(request: APIRequestContext, questionId: string, correct: boolean) {
+  await json(request.post('/api/attempts', { data: { questionId, correct: correct ? 1 : 0 } }))
+  await passMillisecond(Date.now())
+}
+
 /** Creates one question, with its attempts. Questions list in the order they were seeded. */
 export async function seedQuestion(request: APIRequestContext, seed: SeedQuestion) {
   const created = await json<QuestionWithStats>(
@@ -44,6 +51,7 @@ export async function seedQuestion(request: APIRequestContext, seed: SeedQuestio
         difficulty: seed.difficulty ?? 'medium',
         importance: seed.importance ?? 'mid',
         category: seed.categories ?? ['JS'],
+        link: seed.link,
       },
     }),
   )
@@ -53,8 +61,7 @@ export async function seedQuestion(request: APIRequestContext, seed: SeedQuestio
     await json(request.patch(`/api/questions/${created.id}`, { data: { mastered: 1 } }))
   }
   for (const correct of seed.attempts ?? []) {
-    await json(request.post('/api/attempts', { data: { questionId: created.id, correct: correct ? 1 : 0 } }))
-    await passMillisecond(Date.now())
+    await recordAttempt(request, created.id, correct)
   }
   return created.id
 }

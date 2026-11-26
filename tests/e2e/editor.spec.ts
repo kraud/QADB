@@ -21,7 +21,7 @@ import {
   saveEditor,
   showAnswerPreview,
 } from '../flows/questions'
-import { resetUserData, seedQuestion } from '../support/reset'
+import { fetchQuestion, resetUserData, seedQuestion } from '../support/reset'
 
 const QUESTION = 'What is hoisting?'
 
@@ -48,6 +48,8 @@ test('add shows "Question added"', async ({ page }) => {
   await expect(row.getByText('High', { exact: true })).toBeVisible()
   await expect(row.getByText('CSS', { exact: true })).toBeVisible()
   await expect(row.getByText('JS', { exact: true })).toBeHidden()
+  await openEditor(page, QUESTION)
+  await expect(answerField(page)).toHaveValue('Declarations move to the top of their scope.')
 })
 
 test('required fields show errors', async ({ page }) => {
@@ -61,7 +63,15 @@ test('required fields show errors', async ({ page }) => {
 })
 
 test('edit shows "Question updated"', async ({ page }) => {
-  await seedQuestion(page.request, { question: QUESTION })
+  const id = await seedQuestion(page.request, {
+    question: QUESTION,
+    answer: 'The original answer.',
+    difficulty: 'hard',
+    importance: 'high',
+    categories: ['CSS', 'API'],
+    link: 'https://example.com/hoisting',
+    mastered: true,
+  })
   await openContent(page)
   await openEditor(page, QUESTION)
   await expect(questionField(page)).toHaveValue(QUESTION)
@@ -72,6 +82,16 @@ test('edit shows "Question updated"', async ({ page }) => {
   await expect(page.getByText('Question updated')).toBeVisible()
   await expect(editor(page)).toBeHidden()
   await expect(listedQuestions(page)).toHaveText(['What is temporal dead zone?'])
+  // Everything left untouched is stored as it was.
+  expect(await fetchQuestion(page.request, id)).toMatchObject({
+    question: 'What is temporal dead zone?',
+    answer_summary: 'The original answer.',
+    difficulty: 'hard',
+    importance: 'high',
+    category: ['CSS', 'API'],
+    link: 'https://example.com/hoisting',
+    mastered: 1,
+  })
 })
 
 test('delete warns with the attempt count, then "Question deleted"', async ({ page }) => {

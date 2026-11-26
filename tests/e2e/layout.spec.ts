@@ -27,6 +27,7 @@ test('cards replace the table and Filters opens the panel', async ({ page }) => 
 
   await expect(questionCards(page)).toHaveText([EASY, HARD])
   await expect(questionCards(page).first()).toBeVisible()
+  await expect(questionTable(page)).toHaveCount(1) // rendered, but not shown at this width
   await expect(questionTable(page)).toBeHidden()
   await expect(filtersPanel(page)).toBeHidden()
 
