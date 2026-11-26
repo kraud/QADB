@@ -85,6 +85,8 @@ const conflicts = ref<Conflict[]>([])
 const stale = ref(false)
 /** The scenario that names what the dialog is about. */
 const known = ref<Scenario | null>(props.original ?? null)
+/** A refused save has shown the counts read when the editor opened to be out of date. */
+let outdated = false
 /** What is being saved, with the choices confirmed so far. */
 const pending = shallowRef<{ scenario: ScenarioInput; resolutions: Resolutions } | null>(null)
 
@@ -104,6 +106,7 @@ function save() {
   // Choices are made anew for each save: the form may have changed since the last one.
   pending.value = { scenario: parsed.data, resolutions: {} }
   stale.value = false
+  if (outdated) return saveAfresh()
   if (props.original) {
     conflicts.value = findConflicts(props.original, parsed.data, props.original.usage, {})
     if (conflicts.value.length) return
@@ -113,10 +116,41 @@ function save() {
 
 function confirmChanges(moveTo: Record<string, string | null>) {
   if (!pending.value || saving.value) return
-  const { scenario, resolutions } = pending.value
-  pending.value = { scenario, resolutions: buildResolutions(resolutions, conflicts.value, moveTo) }
+  pending.value = { ...pending.value, resolutions: buildResolutions(conflicts.value, moveTo) }
   return send()
 }
+
+/**
+ * Asks about everything the pending save affects according to the counts as they are now, discarding
+ * every earlier confirmation. False, with the reason shown, when they cannot be read.
+ */
+async function askAgain() {
+  let fresh: ScenarioDetail
+  try {
+    fresh = await api<ScenarioDetail>(`/api/scenarios/${encodeURIComponent(props.original!.id)}`)
+  } catch (err) {
+    conflicts.value = []
+    failure.value = failureText((err as RequestError).statusCode)
+    await showFirstError()
+    return false
+  }
+  const { scenario } = pending.value!
+  pending.value = { scenario, resolutions: {} }
+  known.value = fresh
+  stale.value = true
+  conflicts.value = findConflicts(fresh, scenario, fresh.usage, {})
+  return true
+}
+
+async function saveAfresh() {
+  saving.value = true
+  const read = await askAgain()
+  saving.value = false
+  if (read && !conflicts.value.length) return send()
+}
+
+const failureText = (statusCode?: number) =>
+  statusCode === 404 ? 'This scenario no longer exists.' : 'Something went wrong. Please try again.'
 
 interface RequestError {
   statusCode?: number
@@ -152,13 +186,12 @@ async function handle({ statusCode, data }: RequestError) {
   const details = data?.data
   const found = (details as { conflicts?: Conflict[] } | undefined)?.conflicts
   if (statusCode === 409 && found?.length) {
-    try {
-      known.value = await api<Scenario>(`/api/scenarios/${encodeURIComponent(props.original!.id)}`)
-    } catch {
-      // The names read when the editor opened will do.
+    outdated = true
+    if ((await askAgain()) && !conflicts.value.length) {
+      // Nothing is affected any more; sending again is left to the user.
+      failure.value = 'Questions changed while saving. Please save again.'
+      await showFirstError()
     }
-    stale.value = true
-    conflicts.value = found
     return
   }
 
@@ -168,7 +201,7 @@ async function handle({ statusCode, data }: RequestError) {
   } else if (statusCode === 422 && Array.isArray(details) && details.length) {
     serverIssues.value = details
   } else {
-    failure.value = statusCode === 404 ? 'This scenario no longer exists.' : 'Something went wrong. Please try again.'
+    failure.value = failureText(statusCode)
   }
   await showFirstError()
 }

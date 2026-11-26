@@ -607,27 +607,86 @@ test('questions that changed since the editor opened are reported and nothing ty
   await expect(optionRows(card)).toHaveCount(3)
   await expect(optionRow(card, 'Expert')).toBeVisible()
 
-  // Another one: now an option the editor knows to be in use goes too.
-  await deleteOption(card, 'Easy')
+  // Written elsewhere meanwhile: saving again asks with the counts as they are now.
+  const third = await seedQuestion(page.request, scenario, { question: 'Third', difficulty: 'hard' })
   await saveScenario(page)
-  await expect(dialog).toContainText('1 question uses “Easy” (Difficulty).')
-  await expect(dialog).not.toContainText('Hard')
-  await optionChoice(page, 'Easy').selectOption({ label: 'Move to Medium' })
-  await confirmChanges(page)
-
-  // The server asks about the rest, and the first choice still counts.
-  await expect(dialog).toContainText('1 question uses “Hard” (Difficulty).')
-  await expect(dialog).not.toContainText('“Easy”')
-  // The keyboard is still in the dialog.
-  await expect(optionChoice(page, 'Hard')).toBeFocused()
+  await expect(dialog).toContainText('2 questions use “Hard” (Difficulty).')
   await optionChoice(page, 'Hard').selectOption({ label: 'Move to Expert' })
   await confirmChanges(page)
 
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
-  expect(saves).toEqual(['PUT', 'PUT', 'PUT'])
+  expect(saves).toEqual(['PUT', 'PUT'])
   expect((await readScenario(page, scenario.id)).name).toBe('Renamed')
   expect(await heldLabels(page, scenario.id, second, 'Difficulty')).toEqual(['Expert'])
-  await expect(questionRow(page, FIRST)).toContainText('Medium')
+  expect(await heldLabels(page, scenario.id, third, 'Difficulty')).toEqual(['Expert'])
+})
+
+test('after a refused save every destructive change is confirmed again, with current counts', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  const first = await seedQuestion(page.request, scenario, { question: FIRST, difficulty: 'easy' })
+  const saves = savesOf(page)
+  await openScenarios(page)
+  await openScenarioEditor(page, NAME)
+  const card = attributeCard(page, 'Difficulty')
+  await addOption(card, { label: 'Expert' })
+  await deleteOption(card, 'Easy')
+  await deleteOption(card, 'Hard')
+  await saveScenario(page)
+  const dialog = changesDialog(page)
+  await expect(dialog).toContainText('1 question uses “Easy” (Difficulty).')
+  await expect(dialog).not.toContainText('Hard')
+
+  // Written elsewhere while the dialog is open: more of what is being confirmed, and something new.
+  await seedQuestion(page.request, scenario, { question: SECOND, difficulty: 'easy' })
+  await seedQuestion(page.request, scenario, { question: 'Third', difficulty: 'hard' })
+  await optionChoice(page, 'Easy').selectOption({ label: 'Move to Medium' })
+  await confirmChanges(page)
+
+  await expect(dialog).toContainText('Questions changed since you opened the editor.')
+  await expect(dialog).toContainText('2 questions use “Easy” (Difficulty).')
+  await expect(dialog).toContainText('1 question uses “Hard” (Difficulty).')
+  // Nothing chosen before counts, and the keyboard is still in the dialog.
+  await expect(optionChoice(page, 'Easy').locator('option:checked')).toHaveText('Choose…')
+  await expect(optionChoice(page, 'Hard').locator('option:checked')).toHaveText('Choose…')
+  await expect(optionChoice(page, 'Easy')).toBeFocused()
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  // The edits are still in the form, and nothing is stored.
+  await expect(optionRows(card)).toHaveCount(2)
+  await expect(optionRow(card, 'Expert')).toBeVisible()
+  expect(await heldLabels(page, scenario.id, first, 'Difficulty')).toEqual(['Easy'])
+
+  await optionChoice(page, 'Easy').selectOption({ label: 'Move to Medium' })
+  await optionChoice(page, 'Hard').selectOption({ label: 'Move to Expert' })
+  await confirmChanges(page)
+
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  expect(saves).toEqual(['PUT', 'PUT'])
+  expect(await heldLabels(page, scenario.id, first, 'Difficulty')).toEqual(['Medium'])
+})
+
+test('a refused save whose counts cannot be read asks again from fresh counts next time', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  await seedQuestion(page.request, scenario, { question: FIRST, difficulty: 'easy' })
+  await openScenarios(page)
+  await openScenarioEditor(page, NAME)
+  const card = attributeCard(page, 'Difficulty')
+  await deleteOption(card, 'Hard')
+  await seedQuestion(page.request, scenario, { question: SECOND, difficulty: 'hard' })
+  const url = `**/api/scenarios/${scenario.id}`
+  await page.route(url, (route) => (route.request().method() === 'GET' ? route.abort() : route.fallback()))
+
+  await saveScenario(page)
+
+  await expect(page.getByRole('alert')).toContainText('Something went wrong. Please try again.')
+  await expect(changesDialog(page)).toHaveCount(0)
+  await expect(optionRows(card)).toHaveCount(2)
+
+  await page.unroute(url)
+  await saveScenario(page)
+  await expect(changesDialog(page)).toContainText('1 question uses “Hard” (Difficulty).')
+  await optionChoice(page, 'Hard').selectOption({ label: 'Leave empty' })
+  await confirmChanges(page)
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
 })
 
 test('delete a scenario by typing its name', async ({ page }) => {

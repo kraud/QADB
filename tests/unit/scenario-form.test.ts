@@ -266,20 +266,18 @@ describe('buildResolutions', () => {
   ]
 
   it('turns the choices into resolutions, an empty target meaning "leave empty"', () => {
-    expect(buildResolutions({}, conflicts, { o1: 'o3', o2: null })).toEqual({
+    expect(buildResolutions(conflicts, { o1: 'o3', o2: null })).toEqual({
       removedOptions: { o1: { moveTo: 'o3' }, o2: { moveTo: null } },
       removedAttributes: ['a2'],
       collapseToSingle: ['a3'],
     })
   })
 
-  it('adds to the choices of an earlier round', () => {
-    const first = buildResolutions({}, conflicts.slice(0, 1), { o1: 'o3' })
-    const both = buildResolutions(first, conflicts.slice(1), { o2: null })
-    expect(both).toEqual({
-      removedOptions: { o1: { moveTo: 'o3' }, o2: { moveTo: null } },
-      removedAttributes: ['a2'],
-      collapseToSingle: ['a3'],
+  it('holds nothing beyond the conflicts that were confirmed', () => {
+    expect(buildResolutions(conflicts.slice(0, 1), { o1: 'o3' })).toEqual({
+      removedOptions: { o1: { moveTo: 'o3' } },
+      removedAttributes: [],
+      collapseToSingle: [],
     })
   })
 })

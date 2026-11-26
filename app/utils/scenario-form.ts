@@ -126,17 +126,13 @@ export function moveTargets(next: ScenarioInput, attributeId: string): { value: 
 }
 
 /**
- * The user's confirmation of these conflicts, added to `earlier` ones. `moveTo` gives, by removed
- * option id, the option its questions move to, or null to leave them empty.
+ * The user's confirmation of these conflicts. `moveTo` gives, by removed option id, the option its
+ * questions move to, or null to leave them empty.
  */
-export function buildResolutions(
-  earlier: Resolutions,
-  conflicts: Conflict[],
-  moveTo: Record<string, string | null>,
-): Resolutions {
-  const removedOptions = { ...earlier.removedOptions }
-  const removedAttributes = [...(earlier.removedAttributes ?? [])]
-  const collapseToSingle = [...(earlier.collapseToSingle ?? [])]
+export function buildResolutions(conflicts: Conflict[], moveTo: Record<string, string | null>): Resolutions {
+  const removedOptions: NonNullable<Resolutions['removedOptions']> = {}
+  const removedAttributes: string[] = []
+  const collapseToSingle: string[] = []
   for (const conflict of conflicts) {
     if (conflict.type === 'option-in-use') {
       removedOptions[conflict.optionId] = { moveTo: moveTo[conflict.optionId] ?? null }
