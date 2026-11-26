@@ -110,7 +110,8 @@ export async function setSwitch(scope: Locator, name: 'Ordered' | 'Required' | '
 
 export async function chooseColor(row: Locator, color: string) {
   await row.getByRole('button', { name: 'Color', exact: true }).click()
-  await row.getByRole('button', { name: color, exact: true }).click()
+  // The list opens over the page, outside the row.
+  await row.page().getByRole('group', { name: 'Colors' }).getByRole('button', { name: color, exact: true }).click()
 }
 
 export async function addOption(card: Locator, option: OptionDefinition) {

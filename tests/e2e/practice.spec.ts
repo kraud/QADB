@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { visit } from '../flows/auth'
-import { chooseOption } from '../flows/controls'
+import { chooseOption, toast } from '../flows/controls'
 import {
   answerCurrent,
   currentQuestion,
@@ -102,7 +102,7 @@ test('grading records an attempt; Next records none', async ({ page }) => {
   await answerCurrent(page, true)
 
   // Grading stays on the same question and updates its track record.
-  await expect(page.getByText('Correct — recorded')).toBeVisible()
+  await expect(toast(page, 'Correct — recorded')).toBeVisible()
   await expect(currentQuestion(page)).toHaveText(FIRST)
   await expect(page.getByText('Track record — 1 practiced')).toBeVisible()
 
@@ -173,7 +173,7 @@ test('random practice on an empty bank returns to content', async ({ page }) => 
 
   await startRandomPractice(page)
 
-  await expect(page.getByText('No questions to practice')).toBeVisible()
+  await expect(toast(page, 'No questions to practice')).toBeVisible()
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
 })
@@ -248,7 +248,7 @@ for (const mode of ['curated', 'random'] as const) {
     await deleteQuestion(page.request, id)
     await visit(page, url)
 
-    await expect(page.getByText('No questions to practice')).toBeVisible()
+    await expect(toast(page, 'No questions to practice')).toBeVisible()
     await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
     await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
   })
@@ -358,10 +358,10 @@ test('an incomplete question can be graded and marked as mastered', async ({ pag
   await startSelectedPractice(page, [FIRST], true)
 
   await answerCurrent(page, false)
-  await expect(page.getByText('Incorrect — recorded')).toBeVisible()
+  await expect(toast(page, 'Incorrect — recorded')).toBeVisible()
   await page.getByRole('switch', { name: 'Mark as mastered' }).setChecked(true)
 
-  await expect(page.getByText('Marked as mastered', { exact: true }).first()).toBeVisible()
+  await expect(toast(page, 'Marked as mastered')).toBeVisible()
   const stored = await fetchQuestion(page.request, id)
   expect(stored).toMatchObject({ incomplete: true, mastered: 1 })
   expect(stored.attempts.map((a) => a.correct)).toEqual([0])
@@ -411,7 +411,7 @@ test('a mastered response arriving after moving on leaves the current card alone
 
   await update.release()
 
-  await expect(page.locator('.toast', { hasText: 'Marked as mastered' })).toBeVisible()
+  await expect(toast(page, 'Marked as mastered')).toBeVisible()
   await expect(currentQuestion(page)).toHaveText(SECOND)
   await expect(page.getByRole('switch', { name: 'Mark as mastered' })).not.toBeChecked()
 })
@@ -430,7 +430,7 @@ test('a failed mastered request arriving after moving on does not reload the cur
   await deleteQuestion(page.request, first!)
   await update.release()
 
-  await expect(page.getByText('Could not update this question')).toBeVisible()
+  await expect(toast(page, 'Could not update this question')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Show answer' })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Correct', exact: true })).toBeVisible()
   await expect(practiceProgress(page)).toHaveText('Question 2 of 2')

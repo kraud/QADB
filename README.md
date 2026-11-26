@@ -97,6 +97,8 @@ pnpm test:e2e         # end-to-end tests (Playwright)
 
 - Coverage is measured over server code, shared code, utilities and stores. Pages and components are
   covered by the end-to-end tests.
+- Selects, dialogs, switches and similar are [Reka UI](https://reka-ui.com) controls: tests operate
+  them through the helpers in `tests/flows/` (for selects, `chooseOption` in `controls.ts`).
 - API tests start their own throwaway `sqld` on a free port. No test calls the real AI service.
 - The end-to-end run builds the app and starts its own database, AI stub and server on ports 8180,
   8190 and 3100, so those must be free. It does not touch `.localdb/` or your `.env` database.

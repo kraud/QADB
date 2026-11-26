@@ -1,5 +1,5 @@
 // Driving the shared controls. No assertions: recording scripts import these.
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 /** The options of the open list. */
 export function listOptions(trigger: Locator): Locator {
@@ -23,4 +23,9 @@ export async function chooseOption(trigger: Locator, label: string) {
   const options = await openList(trigger)
   await options.and(trigger.page().getByRole('option', { name: label, exact: true })).click()
   await trigger.page().getByRole('listbox').waitFor({ state: 'detached' })
+}
+
+/** A notification on screen. Its text is repeated unseen for screen readers, so it is found by class. */
+export function toast(page: Page, text: string): Locator {
+  return page.locator('.toast', { hasText: text })
 }

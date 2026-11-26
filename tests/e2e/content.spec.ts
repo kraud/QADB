@@ -18,6 +18,7 @@ import {
 } from '../flows/questions'
 import { recordAttempt, resetUserData, seedQuestions, type SeedQuestion } from '../support/reset'
 import { addAttribute, createFrontendScenario, json, optionValues } from '../support/scenario-fixture'
+import { toast } from '../flows/controls'
 
 const ALPHA = 'Alpha: what is a closure?'
 const BETA = 'Beta: how does flexbox work?'
@@ -251,7 +252,7 @@ test('select all, then filtering shows "Selection adjusted to the current result
 
   await toggleFilterChip(page, 'Hard')
 
-  await expect(page.getByText('Selection adjusted to the current results')).toBeVisible()
+  await expect(toast(page, 'Selection adjusted to the current results')).toBeVisible()
   await expect(listedQuestions(page)).toHaveText([GAMMA])
   await expect(page.getByText('1 selected')).toBeVisible()
 })

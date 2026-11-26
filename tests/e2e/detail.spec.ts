@@ -14,6 +14,7 @@ import {
 } from '../flows/questions'
 import { fetchQuestion, resetUserData, seedQuestion } from '../support/reset'
 import { addAttribute, createFrontendScenario, createScenario, FRONTEND_SCENARIO } from '../support/scenario-fixture'
+import { toast } from '../flows/controls'
 
 const QUESTION = 'What is event delegation?'
 
@@ -135,7 +136,7 @@ test('delete returns to the content page', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   await confirmDelete(page)
 
-  await expect(page.getByText('Question deleted')).toBeVisible()
+  await expect(toast(page, 'Question deleted')).toBeVisible()
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
 })

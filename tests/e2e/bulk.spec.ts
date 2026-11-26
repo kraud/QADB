@@ -25,7 +25,7 @@ import {
   toggleBulkOption,
   toggleFilterChip,
 } from '../flows/questions'
-import { closeList, openList } from '../flows/controls'
+import { closeList, openList, toast } from '../flows/controls'
 import { deleteQuestion, fetchQuestion, resetUserData, seedQuestions } from '../support/reset'
 import {
   addAttribute,
@@ -109,8 +109,8 @@ test('bulk set fixes all selected; fixed rows leave the filtered selection', asy
   await applyBulk(page)
 
   await expect(bulkDialog(page)).toHaveCount(0)
-  await expect(page.getByText('2 questions updated')).toBeVisible()
-  await expect(page.getByText('Selection adjusted to the current results')).toBeVisible()
+  await expect(toast(page, '2 questions updated')).toBeVisible()
+  await expect(toast(page, 'Selection adjusted to the current results')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Edit attributes' })).toHaveCount(0)
   await expect(incompleteBanner(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'No questions match these filters' })).toBeVisible()
@@ -146,7 +146,7 @@ test('bulk add, replace and remove on a multiple attribute', async ({ page }) =>
     await toggleBulkOption(page, 'API')
     await expect(bulkDialog(page).getByRole('status')).toHaveText('2 questions will change.')
     await applyBulk(page)
-    await expect(page.getByText('2 questions updated')).toBeVisible()
+    await expect(toast(page, '2 questions updated')).toBeVisible()
     expect(await held(page, scenario, ids, 'Category')).toEqual([['JS', 'API'], ['CSS', 'JS', 'API'], ['HTML']])
   })
 
@@ -219,7 +219,7 @@ test('bulk clear on an optional attribute', async ({ page }) => {
   await expect(bulkDialog(page).getByRole('status')).toHaveText('1 question will change.')
   await applyBulk(page)
 
-  await expect(page.getByText('1 question updated')).toBeVisible()
+  await expect(toast(page, '1 question updated')).toBeVisible()
   await expect(questionRow(page, FIRST).getByTitle('Region')).toHaveText('—')
   await expect(selectedCount(page, 2)).toBeVisible()
   expect(await held(page, changed, ids, 'Region')).toEqual([[], []])
@@ -323,7 +323,7 @@ test('Apply sends one request and the dialog stays while it runs', async ({ page
   await held[1]!.continue()
 
   await expect(bulkDialog(page)).toHaveCount(0)
-  await expect(page.getByText('1 question updated')).toBeVisible()
+  await expect(toast(page, '1 question updated')).toBeVisible()
   expect(held).toHaveLength(2)
 })
 
@@ -412,7 +412,7 @@ test('a list that fails to load closes the dialog and blocks bulk editing', asyn
     await toggleBulkOption(page, 'Hard')
     await routeList(page, fail)
     await applyButton(page).click()
-    await expect(page.getByText('1 question updated')).toBeVisible()
+    await expect(toast(page, '1 question updated')).toBeVisible()
     await expect(page.getByRole('heading', { name: LOAD_ERROR })).toBeVisible()
     await expect(editButton(page)).toBeDisabled()
   })
@@ -527,7 +527,7 @@ test.describe('on a narrow screen', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
     await applyBulk(page)
 
-    await expect(page.getByText('2 questions updated')).toBeVisible()
+    await expect(toast(page, '2 questions updated')).toBeVisible()
     await expect(incompleteBanner(page)).toHaveCount(0)
     expect(await held(page, changed, ids, 'Level')).toEqual([['Junior'], ['Junior']])
   })

@@ -30,6 +30,7 @@ import {
 } from '../flows/questions'
 import { fetchQuestion, resetUserData, seedQuestion } from '../support/reset'
 import { addAttribute, addOptions, createFrontendScenario, json, optionValues } from '../support/scenario-fixture'
+import { toast } from '../flows/controls'
 
 const QUESTION = 'What is hoisting?'
 
@@ -51,7 +52,7 @@ test('add shows "Question added"', async ({ page }) => {
     categories: ['CSS'],
   })
 
-  await expect(page.getByText('Question added')).toBeVisible()
+  await expect(toast(page, 'Question added')).toBeVisible()
   await expect(editor(page)).toBeHidden()
   await expect(listedQuestions(page)).toHaveText([QUESTION])
   const row = questionRow(page, QUESTION)
@@ -90,7 +91,7 @@ test('edit shows "Question updated"', async ({ page }) => {
   await questionField(page).fill('What is temporal dead zone?')
   await saveEditor(page)
 
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   await expect(editor(page)).toBeHidden()
   await expect(listedQuestions(page)).toHaveText(['What is temporal dead zone?'])
   // Everything left untouched is stored as it was.
@@ -113,7 +114,7 @@ test('delete warns with the attempt count, then "Question deleted"', async ({ pa
   )
   await confirmDelete(page)
 
-  await expect(page.getByText('Question deleted')).toBeVisible()
+  await expect(toast(page, 'Question deleted')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
 })
 
@@ -156,7 +157,7 @@ test('Format replaces the answer with the stub result', async ({ page }) => {
   await formatAnswer(page)
 
   await expect(answerField(page)).toHaveValue('**stub** plain answer')
-  await expect(page.getByText('Formatted with AI')).toBeVisible()
+  await expect(toast(page, 'Formatted with AI')).toBeVisible()
 })
 
 test('closing after changing only an attribute asks "Discard changes?"', async ({ page }) => {
@@ -248,7 +249,7 @@ test('editing an incomplete question marks what is missing and preselects nothin
   await expect(level.getByText('Level is required')).toBeHidden()
   await saveEditor(page)
 
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   expect(await fetchQuestion(page.request, id)).toMatchObject({
     incomplete: false,
     values: optionValues(changed, {
@@ -289,7 +290,7 @@ test('single choice holds one option, and optional attributes can be cleared', a
     await expect(chosenEditorOptions(page, attribute)).toHaveText([second])
   }
   await saveEditor(page)
-  await expect(page.getByText('Question added')).toBeVisible()
+  await expect(toast(page, 'Question added')).toBeVisible()
   await openEditor(page, QUESTION)
   await expect(chosenEditorOptions(page, 'Team')).toHaveText(['Pink'])
 
@@ -302,7 +303,7 @@ test('single choice holds one option, and optional attributes can be cleared', a
 
   const empty = optionValues(changed, { Difficulty: ['Medium'], Importance: ['Mid'], Category: ['JS'] })
   expect((await saved).postDataJSON().values).toEqual(empty)
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   await expect(questionRow(page, QUESTION).getByTitle('Region')).toHaveText('—')
 })
 
@@ -314,7 +315,7 @@ test('an emptied link is removed', async ({ page }) => {
   await linkField(page).fill('')
   await saveEditor(page)
 
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   expect((await fetchQuestion(page.request, id)).link).toBeNull()
 })
 
@@ -359,7 +360,7 @@ test('editing on a stale page shows and keeps what was added elsewhere', async (
   await questionField(page).fill('Renamed')
   await saveEditor(page)
 
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   expect((await fetchQuestion(page.request, id)).values).toEqual(
     optionValues(changed, { Difficulty: ['Expert'], Importance: ['Mid'], Category: ['JS', 'Vue'], Region: ['South'] }),
   )
@@ -383,7 +384,7 @@ test('a new question on a stale page starts from the current scenario', async ({
   await answerField(page).fill('An answer.')
   await saveEditor(page)
 
-  await expect(page.getByText('Question added')).toBeVisible()
+  await expect(toast(page, 'Question added')).toBeVisible()
   await expect(questionRow(page, QUESTION).getByTitle('Region')).toHaveText('North')
   expect(changed.attributes).toHaveLength(4)
 })
@@ -407,7 +408,7 @@ test('options the editor cannot name are kept when the scenario cannot be read a
   await chooseEditorOption(page, 'Category', 'CSS')
   await saveEditor(page)
 
-  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(toast(page, 'Question updated')).toBeVisible()
   expect((await fetchQuestion(page.request, id)).values).toEqual(
     optionValues(changed, {
       Difficulty: ['Expert'],

@@ -17,6 +17,10 @@ and attempts are the same in every scenario.
 - **Auth:** `nuxt-auth-utils` sealed session cookies; argon2id hashing (`@node-rs/argon2`) with a
   PBKDF2 fallback.
 - **Pinia** for the practice session. **zod** for request validation. **TypeScript** throughout.
+- **Components:** [Reka UI](https://reka-ui.com) (headless), styled in `app/assets/tokens.css`.
+  Two workarounds live in the wrappers: `ui/Toast` keeps its own live region because Reka 2.11 hides
+  its announcement from screen readers, and `ui/Modal` takes focus back on Tab when a button disabled
+  itself.
 - **Deploy:** Vercel (Nitro preset auto-detected).
 
 ### Project structure
@@ -28,7 +32,9 @@ app/
                      AttributeBadges, PracticeSession, PracticeCard, TrackRecord, ConfirmDialog
     scenario/        ScenarioForm, AttributeCard, OptionRow, ColorPicker,
                      ResolveChangesDialog, DeleteScenarioDialog
-    ui/              primitives (Btn, Badge, Chip, Seg, Switch, Checkbox, Input, Modal, ...)
+    ui/              primitives. Select, Modal, Toast, Switch, Checkbox, Seg, ChipGroup/Chip and
+                     Progress wrap Reka UI (as does scenario/ColorPicker); pages use only these
+                     wrappers. Btn, Badge, Input, Empty and Skeleton are plain Vue
   composables/       useApi, useScenario, useTheme, useToast, keepFocus
   pages/             see "Screens"
   stores/practice.ts

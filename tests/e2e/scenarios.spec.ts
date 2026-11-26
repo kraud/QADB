@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { visit } from '../flows/auth'
-import { chooseOption, closeList, openList } from '../flows/controls'
+import { chooseOption, closeList, openList, toast } from '../flows/controls'
 import { answerCurrent, currentQuestion, showAnswer, startSelectedPractice } from '../flows/practice'
 import {
   answerField,
@@ -131,7 +131,7 @@ test('create a scenario with a single and a multiple attribute, then add and pra
   })
 
   await expect(page).toHaveURL(CONTENT_URL)
-  await expect(page.getByText('Scenario created')).toBeVisible()
+  await expect(toast(page, 'Scenario created')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
   await expectSwitcherLists(page, ['All scenarios', 'Finance'])
   const sid = CONTENT_URL.exec(page.url())![1]!
@@ -161,7 +161,7 @@ test('create a scenario with a single and a multiple attribute, then add and pra
   await expect(currentQuestion(page)).toHaveText(FIRST)
   await showAnswer(page)
   await answerCurrent(page, true)
-  await expect(page.getByText('Correct — recorded')).toBeVisible()
+  await expect(toast(page, 'Correct — recorded')).toBeVisible()
 })
 
 test('a scenario without attributes is a plain list', async ({ page }) => {
@@ -355,7 +355,7 @@ test('rename, recolor and reorder show up in the table', async ({ page }) => {
   await saveScenario(page)
 
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
-  await expect(page.getByText('Scenario saved')).toBeVisible()
+  await expect(toast(page, 'Scenario saved')).toBeVisible()
   await expect(page.locator('.qtable th')).toContainText(['Question', 'Importance', 'Level', 'Category'])
   const badge = questionRow(page, FIRST).getByText('Simple', { exact: true })
   await expect(badge).toHaveAttribute('style', /--c-red/)
@@ -728,7 +728,7 @@ test('delete a scenario by typing its name', async ({ page }) => {
   await deleteScenarioNameField(page).fill(NAME)
   await deleteScenarioButton(page).click()
 
-  await expect(page.getByText('Scenario deleted')).toBeVisible()
+  await expect(toast(page, 'Scenario deleted')).toBeVisible()
   await expect(scenarioCard(page, NAME)).toHaveCount(0)
   await expect(scenarioCard(page, 'Kept')).toBeVisible()
   await expectSwitcherLists(page, ['All scenarios', 'Kept'])
@@ -787,11 +787,12 @@ test('the scenario screens fit a narrow screen', async ({ page }) => {
   // The color choices stay on screen, from the first row to the last attribute's.
   const row = optionRows(attributeCards(page).last()).last()
   await row.getByRole('button', { name: 'Color', exact: true }).click()
-  await expect(row.getByRole('button', { name: 'Red', exact: true })).toBeInViewport({ ratio: 1 })
-  await expect(row.getByRole('button', { name: 'Blue 1', exact: true })).toBeInViewport({ ratio: 1 })
+  const colors = page.getByRole('group', { name: 'Colors' })
+  await expect(colors.getByRole('button', { name: 'Red', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(colors.getByRole('button', { name: 'Blue 1', exact: true })).toBeInViewport({ ratio: 1 })
   expect(await overflow()).toBeLessThanOrEqual(0)
   await page.keyboard.press('Escape')
-  await expect(row.getByRole('button', { name: 'Red', exact: true })).toHaveCount(0)
+  await expect(colors).toHaveCount(0)
 
   await deleteAttribute(page, 'Category')
   await saveScenario(page)

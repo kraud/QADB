@@ -31,6 +31,7 @@ import {
   createScenario,
   json,
 } from '../support/scenario-fixture'
+import { toast } from '../flows/controls'
 
 const FIRST = 'First: what is a closure?'
 const SECOND = 'Second: how does flexbox work?'
@@ -112,7 +113,7 @@ test('the editor highlights what is missing and blocks save until chosen', async
 
   // The fixed question leaves the filtered list and the selection.
   await expect(listedQuestions(page)).toHaveText([SECOND])
-  await expect(page.getByText('Selection adjusted to the current results')).toBeVisible()
+  await expect(toast(page, 'Selection adjusted to the current results')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start practice' })).toHaveCount(0)
   await expect(incompleteBanner(page)).toContainText('1 incomplete question')
   await expect(incompleteBanner(page)).not.toContainText('questions')
@@ -125,7 +126,7 @@ test('mastered and practice work on an incomplete question', async ({ page }) =>
 
   await expect(currentQuestion(page)).toHaveText(FIRST)
   await answerCurrent(page, true)
-  await expect(page.getByText('Correct — recorded')).toBeVisible()
+  await expect(toast(page, 'Correct — recorded')).toBeVisible()
   await setMastered(page, true)
   await expect(masteredSwitch(page)).toBeChecked()
 
