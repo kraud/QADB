@@ -84,6 +84,26 @@ describe('creating a question', () => {
     expect((await stored()).questionOptions).toHaveLength(4)
   })
 
+  it('stores a bare domain as an https address', async () => {
+    const created = await create({ link: ' example.com/docs ' })
+
+    expect(created.link).toBe('https://example.com/docs')
+    expect((await patch(created.id, { link: 'example.org' })).data.link).toBe('https://example.org')
+  })
+
+  it('names the link in the refusal, which the editor shows beside the field', async () => {
+    const res = await api.as(alice)('post', `/api/scenarios/${s.sid}/questions`, body({ link: 'not a link' }))
+
+    expect(res.status).toBe(422)
+    expect(res.data.data.map((issue: { path: string[] }) => issue.path)).toEqual([['link']])
+  })
+
+  it('counts the added https towards the length limit', async () => {
+    const link = `example.com/${'x'.repeat(2030)}`
+
+    expect((await api.as(alice)('post', `/api/scenarios/${s.sid}/questions`, body({ link }))).status).toBe(422)
+  })
+
   it('gives every attribute an entry and takes a blank link as none', async () => {
     const { [s.region]: _, ...values } = s.values('Easy', 'JS')
 
@@ -142,6 +162,7 @@ describe('creating a question', () => {
     ['a blank question', () => body({ question: '  ' })],
     ['a blank answer', () => body({ answer: '' })],
     ['a long link', () => body({ link: 'x'.repeat(2049) })],
+    ['a link that is not a web address', () => body({ link: 'javascript:alert(1)' })],
     ['no values', () => body({ values: undefined })],
     ['values as a list', () => body({ values: [] })],
     ['values as text', () => body({ values: 'x' })],
@@ -299,6 +320,7 @@ describe('updating a question', () => {
     ['a blank question', { question: ' ' }],
     ['a blank answer', { answer: '' }],
     ['a long link', { link: 'x'.repeat(2049) }],
+    ['a link that is not a web address', { link: 'javascript:alert(1)' }],
     ['mastered 2', { mastered: 2 }],
     ['mastered true', { mastered: true }],
     ['null values', { values: null }],
@@ -383,7 +405,7 @@ describe('writing atomically', () => {
         await change()
       }
       return batch(statements)
-    }) as typeof api.db.batch)
+    }) as unknown as typeof api.db.batch)
     return () => raced
   }
 

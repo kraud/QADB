@@ -78,6 +78,15 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
 
   const accounts = new Map<string, AuthUser>()
 
+  /** What the routes read at run time. A test may change it. */
+  const config = {
+    tursoUrl: server.url,
+    tursoToken: '',
+    opencodeApiKey: '',
+    opencodeUrl: AI_URL,
+    public: { registrationOpen: true },
+  }
+
   // What Nitro would auto-import. Set before the server modules load, as some use it at import time.
   const globals = {
     createError,
@@ -86,7 +95,7 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
     getRouterParam,
     readBody,
     setResponseStatus,
-    useRuntimeConfig: () => ({ tursoUrl: server.url, tursoToken: '', opencodeApiKey: '', opencodeUrl: AI_URL }),
+    useRuntimeConfig: () => config,
     getUserSession: async (event: H3Event) => ({ user: accounts.get(getHeader(event, USER_HEADER) ?? '') }),
     setUserSession: async (event: H3Event, { user }: { user: AuthUser }) => {
       accounts.set(user.id, user)
@@ -126,6 +135,7 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
 
   return {
     db: db as Db,
+    config,
     /** The throwaway database, for code that brings its own client. */
     url: server.url,
 

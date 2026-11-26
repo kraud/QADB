@@ -359,7 +359,7 @@ describe('changes made while saving', () => {
         result.left = await stored()
       }
       return batch(statements)
-    }) as typeof api.db.batch)
+    }) as unknown as typeof api.db.batch)
     return result
   }
 

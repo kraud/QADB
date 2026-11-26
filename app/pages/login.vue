@@ -3,6 +3,7 @@ definePageMeta({ layout: 'auth' })
 
 const route = useRoute()
 const practice = usePracticeStore()
+const { registrationOpen } = useRuntimeConfig().public
 
 const username = ref('')
 const password = ref('')
@@ -84,6 +85,6 @@ async function submit() {
       </div>
     </form>
 
-    <p class="auth-alt">Don't have an account? <NuxtLink to="/register">Register</NuxtLink></p>
+    <p v-if="registrationOpen" class="auth-alt">Don't have an account? <NuxtLink to="/register">Register</NuxtLink></p>
   </div>
 </template>

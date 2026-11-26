@@ -1,13 +1,14 @@
 import { z } from 'zod'
+import { linkSchema } from '../../../shared/scenario/link'
 import { updateQuestion } from '../../services/questions'
 
 const bodySchema = z
   .object({
     question: z.string().trim().min(1).optional(),
     answer: z.string().trim().min(1).optional(),
-    link: z.string().trim().max(2048).optional().nullable(),
+    link: linkSchema.optional().nullable(),
     // Only the shape; the service checks the ids against the scenario.
-    values: z.record(z.array(z.string())).optional(),
+    values: z.record(z.string(), z.array(z.string())).optional(),
     mastered: z.union([z.literal(0), z.literal(1)]).optional(),
   })
   // An unknown field means a client of another version: saving only part of its edit would lose the rest.

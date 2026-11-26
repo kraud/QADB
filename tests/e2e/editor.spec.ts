@@ -307,6 +307,21 @@ test('single choice holds one option, and optional attributes can be cleared', a
   await expect(questionRow(page, QUESTION).getByTitle('Region')).toHaveText('—')
 })
 
+test('a bare domain is saved with https, and another address is refused beside the field', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await openContent(page, scenario.id)
+  await openEditor(page, QUESTION)
+
+  await linkField(page).fill('javascript:alert(1)')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText('Enter a valid URL.')).toBeVisible()
+
+  await linkField(page).fill('example.com/hoisting')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect((await fetchQuestion(page.request, id)).link).toBe('https://example.com/hoisting')
+})
+
 test('an emptied link is removed', async ({ page }) => {
   const id = await seedQuestion(page.request, scenario, { question: QUESTION, link: 'https://example.com/hoisting' })
   await openContent(page, scenario.id)

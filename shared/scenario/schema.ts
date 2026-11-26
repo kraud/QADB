@@ -43,7 +43,7 @@ const attributeInputSchema = z
   })
   .superRefine((attribute, ctx) => {
     const issue = (path: (string | number)[], message: string) =>
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message })
+      ctx.addIssue({ code: 'custom', path, message })
 
     for (const index of repeatedIndexes(attribute.options.map((option) => option.label))) {
       issue(['options', index, 'label'], 'Option labels must be unique')
@@ -65,7 +65,7 @@ function rejectRepeats(ctx: z.RefinementCtx, entries: { value: string | undefine
   for (const { value, path } of entries) {
     if (value === undefined) continue
     if (seen.has(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: `Each ${path.at(-1)} can be used only once` })
+      ctx.addIssue({ code: 'custom', path, message: `Each ${path.at(-1)} can be used only once` })
     }
     seen.add(value)
   }
@@ -76,7 +76,7 @@ export const scenarioInputSchema = z.object({
   name: text('name', NAME_MAX),
   attributes: z.array(attributeInputSchema).superRefine((attributes, ctx) => {
     for (const index of repeatedIndexes(attributes.map((attribute) => attribute.name))) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, 'name'], message: 'Attribute names must be unique' })
+      ctx.addIssue({ code: 'custom', path: [index, 'name'], message: 'Attribute names must be unique' })
     }
     rejectRepeats(
       ctx,
