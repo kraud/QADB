@@ -1,4 +1,4 @@
-import type { AttributeValues, Scenario } from './types'
+import type { Attribute, AttributeValues, Scenario } from './types'
 
 export interface ValueIssue {
   path: ['values', string]
@@ -20,6 +20,15 @@ export function missingAttributeIds(scenario: Scenario, values: AttributeValues)
   return scenario.attributes
     .filter((attribute) => attribute.required && !values[attribute.id]?.length)
     .map((attribute) => attribute.id)
+}
+
+/**
+ * The chosen ids in option order. Ids the attribute does not list come last: the definition at hand
+ * may be older than the choice, which must not get lost for that.
+ */
+export function orderedOptionIds(attribute: Attribute, chosen: string[]): string[] {
+  const known = attribute.options.map((option) => option.id)
+  return [...known.filter((id) => chosen.includes(id)), ...chosen.filter((id) => !known.includes(id))]
 }
 
 /** Checks values against the scenario definition; `requireAll` also demands every required attribute. */

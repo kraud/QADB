@@ -10,6 +10,8 @@ const bodySchema = z
     values: z.record(z.array(z.string())).optional(),
     mastered: z.union([z.literal(0), z.literal(1)]).optional(),
   })
+  // An unknown field means a client of another version: saving only part of its edit would lose the rest.
+  .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' })
 
 export default defineEventHandler(async (event) => {

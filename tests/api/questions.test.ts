@@ -190,7 +190,7 @@ describe('reading', () => {
 })
 
 describe('updating a question', () => {
-  it('changes only what is sent and replaces all values', async () => {
+  it('changes only what is sent, replacing the values of the attributes sent', async () => {
     const created = await create({ link: 'https://example.com', values: s.values('Easy', 'HTML', 'JS', 'EU') })
     await api.db.update(questions).set({ updated_at: 1 }).where(eq(questions.id, created.id))
 
@@ -205,6 +205,47 @@ describe('updating a question', () => {
     expect(revalued.data).toMatchObject({ answer: 'New', link: null, values: s.values('Hard', 'CSS') })
     expect((await get(created.id)).data).toEqual({ ...revalued.data, attempts: [] })
     expect((await stored()).questionOptions).toHaveLength(2)
+  })
+
+  it('keeps the stored options of the attributes that values does not name', async () => {
+    const created = await create({ values: s.values('Easy', 'HTML', 'JS', 'EU') })
+
+    // What a client sends whose definition lacks the other attributes, required or not.
+    const res = await patch(created.id, { values: { [s.level]: [s.ids.Hard!] } })
+
+    expect(res.status, JSON.stringify(res.data)).toBe(200)
+    expect(res.data.values).toEqual(s.values('Hard', 'HTML', 'JS', 'EU'))
+    expect((await get(created.id)).data.values).toEqual(s.values('Hard', 'HTML', 'JS', 'EU'))
+    expect((await stored()).questionOptions).toHaveLength(4)
+  })
+
+  it('clears an attribute sent with an empty list, and only that one', async () => {
+    const created = await create({ values: s.values('Easy', 'JS', 'EU') })
+
+    const res = await patch(created.id, { values: { [s.region]: [] } })
+
+    expect(res.status, JSON.stringify(res.data)).toBe(200)
+    expect(res.data.values).toEqual(s.values('Easy', 'JS'))
+    expect((await stored()).questionOptions).toHaveLength(2)
+  })
+
+  it('demands the required attributes of the question as it would be stored', async () => {
+    const complete = await create()
+    const incomplete = await addIncomplete('Easy')
+    const before = await stored()
+
+    const emptied = await patch(complete.id, { values: { [s.topic]: [] } })
+    const stillMissing = await patch(incomplete, { values: { [s.region]: [s.ids.US!] } })
+    const nothing = await patch(incomplete, { values: {} })
+
+    for (const res of [emptied, stillMissing, nothing]) {
+      expect(res.status, JSON.stringify(res.data)).toBe(422)
+      expect(res.data.data).toEqual([{ path: ['values', s.topic], message: 'Topic is required' }])
+    }
+    expect(await stored()).toEqual(before)
+
+    const filled = await patch(incomplete, { values: { [s.topic]: [s.ids.CSS!] } })
+    expect(filled.data).toMatchObject({ incomplete: false, values: s.values('Easy', 'CSS') })
   })
 
   it.each(['', '   ', null])('removes the link given %j', async (link) => {
@@ -270,6 +311,39 @@ describe('updating a question', () => {
 
     expect(res.status).toBe(422)
     expect(await stored()).toEqual(before)
+  })
+
+  /** What the app sent before questions had scenario attributes. */
+  const oldPayload = {
+    question: 'Changed',
+    answer_summary: 'Changed too.',
+    difficulty: 'hard',
+    importance: 'high',
+    category: ['CSS'],
+    link: 'https://example.com/changed',
+  }
+
+  it.each([
+    ['the old payload', oldPayload],
+    ['an unknown field beside known ones', { question: 'Changed', answer_summary: 'Changed too.' }],
+  ])('writes nothing when patched with %s', async (_name, changes) => {
+    const created = await create()
+    const before = await stored()
+
+    const res = await patch(created.id, changes)
+
+    expect(res.status, JSON.stringify(res.data)).toBe(422)
+    expect(await stored()).toEqual(before)
+  })
+
+  it.each([
+    ['the old payload', () => oldPayload],
+    ['an unknown field beside a whole question', () => body({ difficulty: 'hard' })],
+  ])('creates nothing from %s', async (_name, payload) => {
+    const res = await api.as(alice)('post', `/api/scenarios/${s.sid}/questions`, payload())
+
+    expect(res.status, JSON.stringify(res.data)).toBe(422)
+    expect(await stored()).toEqual(empty)
   })
 
   it('says there is nothing to update', async () => {

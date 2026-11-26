@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { colorVar } from '#shared/scenario/colors'
 import type { Attribute } from '#shared/scenario/types'
+import { orderedOptionIds } from '#shared/scenario/values'
 
 /** More options than this do not fit a segmented control. */
 const SEG_MAX = 4
@@ -27,10 +28,8 @@ function toggle(id: string) {
     if (!chosen) choose(id)
     else if (!props.attribute.required) emit('update:modelValue', [])
   } else if (!locked(id)) {
-    const next = props.attribute.options
-      .map((o) => o.id)
-      .filter((o) => (o === id ? !chosen : props.modelValue.includes(o)))
-    emit('update:modelValue', next)
+    const next = chosen ? props.modelValue.filter((o) => o !== id) : [...props.modelValue, id]
+    emit('update:modelValue', orderedOptionIds(props.attribute, next))
   }
 }
 </script>

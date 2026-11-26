@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attribute, Scenario } from '../../shared/scenario/types'
-import { defaultValues, missingAttributeIds, validateValues } from '../../shared/scenario/values'
+import { defaultValues, missingAttributeIds, orderedOptionIds, validateValues } from '../../shared/scenario/values'
 
 function attribute(id: string, extra: Partial<Attribute> = {}, defaults: string[] = []): Attribute {
   return {
@@ -34,6 +34,13 @@ const scenario: Scenario = {
 const paths = (issues: { path: string[] }[]) => issues.map((issue) => issue.path)
 
 describe('values', () => {
+  it('orderedOptionIds follows option order and keeps, at the end, ids the attribute does not list', () => {
+    const [level] = scenario.attributes
+
+    expect(orderedOptionIds(level!, ['new', 'level3', 'level1'])).toEqual(['level1', 'level3', 'new'])
+    expect(orderedOptionIds(level!, [])).toEqual([])
+  })
+
   it('defaultValues preselects defaults and leaves the rest empty', () => {
     expect(defaultValues(scenario)).toEqual({ level: ['level2'], tags: ['tags1', 'tags3'], extra: [] })
     expect(defaultValues({ id: 's', name: 'S', attributes: [] })).toEqual({})

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import {
   addQuestion,
@@ -19,6 +19,7 @@ import {
   listedQuestions,
   openContent,
   openDeleteDialog,
+  openDetail,
   openEditor,
   openNewEditor,
   questionField,
@@ -27,7 +28,7 @@ import {
   showAnswerPreview,
 } from '../flows/questions'
 import { fetchQuestion, resetUserData, seedQuestion } from '../support/reset'
-import { addAttribute, createFrontendScenario, optionValues } from '../support/scenario-fixture'
+import { addAttribute, addOptions, createFrontendScenario, json, optionValues } from '../support/scenario-fixture'
 
 const QUESTION = 'What is hoisting?'
 
@@ -314,4 +315,152 @@ test('an emptied link is removed', async ({ page }) => {
 
   await expect(page.getByText('Question updated')).toBeVisible()
   expect((await fetchQuestion(page.request, id)).link).toBeNull()
+})
+
+// ─── a scenario changed elsewhere while the page is open ─────────────────
+
+/**
+ * What another tab does: adds a Category and a Difficulty option and an optional attribute, and
+ * gives the question the new ones. Returns the scenario as it is now.
+ */
+async function changeElsewhere(page: Page, questionId: string) {
+  let changed = await addOptions(page.request, scenario, 'Category', ['Vue'])
+  changed = await addOptions(page.request, changed, 'Difficulty', ['Expert'])
+  changed = await addAttribute(page.request, changed, { name: 'Region', labels: ['North', 'South'], required: false })
+  const values = optionValues(changed, {
+    Difficulty: ['Expert'],
+    Importance: ['Mid'],
+    Category: ['JS', 'Vue'],
+    Region: ['South'],
+  })
+  await json(page.request.patch(`/api/questions/${questionId}`, { data: { values } }))
+  return changed
+}
+
+test('editing on a stale page shows and keeps what was added elsewhere', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await openContent(page, scenario.id)
+  const changed = await changeElsewhere(page, id)
+
+  await openEditor(page, QUESTION)
+
+  for (const [attribute, option] of [
+    ['Difficulty', 'Expert'],
+    ['Category', 'Vue'],
+    ['Region', 'South'],
+  ] as const) {
+    await expect(editorOption(page, attribute, option)).toHaveAttribute('aria-pressed', 'true')
+  }
+  await closeEditor(page)
+  await expect(editor(page)).toBeHidden() // opening it changed nothing
+
+  await openEditor(page, QUESTION)
+  await questionField(page).fill('Renamed')
+  await saveEditor(page)
+
+  await expect(page.getByText('Question updated')).toBeVisible()
+  expect((await fetchQuestion(page.request, id)).values).toEqual(
+    optionValues(changed, { Difficulty: ['Expert'], Importance: ['Mid'], Category: ['JS', 'Vue'], Region: ['South'] }),
+  )
+})
+
+test('a new question on a stale page starts from the current scenario', async ({ page }) => {
+  await openContent(page, scenario.id)
+  const changed = await addAttribute(page.request, scenario, {
+    name: 'Region',
+    labels: ['North', 'South'], // North is the default
+    required: true,
+  })
+
+  await openNewEditor(page)
+
+  await expect(editorOption(page, 'Region', 'North')).toHaveAttribute('aria-pressed', 'true')
+  await closeEditor(page)
+  await expect(editor(page)).toBeHidden()
+  await openNewEditor(page)
+  await questionField(page).fill(QUESTION)
+  await answerField(page).fill('An answer.')
+  await saveEditor(page)
+
+  await expect(page.getByText('Question added')).toBeVisible()
+  await expect(questionRow(page, QUESTION).getByTitle('Region')).toHaveText('North')
+  expect(changed.attributes).toHaveLength(4)
+})
+
+test('options the editor cannot name are kept when the scenario cannot be read again', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await openContent(page, scenario.id)
+  const changed = await changeElsewhere(page, id)
+  // The editor is left with what the page read before the change.
+  let refused = 0
+  await page.route(`**/api/scenarios/${scenario.id}`, (route) => {
+    refused++
+    return route.abort()
+  })
+
+  await openEditor(page, QUESTION)
+  expect(refused).toBeGreaterThan(0)
+  await expect(editorAttribute(page, 'Region')).toHaveCount(0)
+  await expect(editor(page).getByText('Difficulty is required')).toHaveCount(0)
+  // Choosing among the known options of a multiple attribute leaves the unknown one alone.
+  await chooseEditorOption(page, 'Category', 'CSS')
+  await saveEditor(page)
+
+  await expect(page.getByText('Question updated')).toBeVisible()
+  expect((await fetchQuestion(page.request, id)).values).toEqual(
+    optionValues(changed, {
+      Difficulty: ['Expert'],
+      Importance: ['Mid'],
+      Category: ['CSS', 'JS', 'Vue'],
+      Region: ['South'],
+    }),
+  )
+})
+
+test('the detail page shows an attribute added elsewhere once it is saved', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await openDetail(page, scenario.id, id)
+  await expect(page.getByRole('heading', { name: QUESTION })).toBeVisible()
+  await addAttribute(page.request, scenario, { name: 'Region', labels: ['North', 'South'], required: false })
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await chooseEditorOption(page, 'Region', 'South')
+  await saveEditor(page)
+
+  await expect(editor(page)).toBeHidden()
+  await expect(page.locator('.detail-head .badge-row')).toContainText('South')
+})
+
+test('a slow load does not overwrite the editor opened after it', async ({ page }) => {
+  const other = 'What is a closure?'
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await seedQuestion(page.request, scenario, { question: other })
+  const held: Route[] = []
+  await page.route(`**/api/questions/${id}`, (route) => {
+    held.push(route)
+  })
+  await openContent(page, scenario.id)
+
+  /** Opens the first question, closes before it has loaded, opens something else, then answers. */
+  async function overtake(openOther: () => Promise<void>, shows: string) {
+    await questionRow(page, QUESTION).getByRole('button', { name: /^Edit / }).click()
+    await expect.poll(() => held.length).toBe(1)
+    await closeEditor(page)
+    await expect(editor(page)).toBeHidden()
+    await openOther()
+    await expect(questionField(page)).toHaveValue(shows)
+
+    const answered = page.waitForResponse((res) => res.url().endsWith(`/api/questions/${id}`))
+    await held.pop()!.continue()
+    await (await answered).finished()
+    // Time for a late answer to reach the form, which it must not.
+    await page.waitForTimeout(500)
+    await expect(questionField(page)).toHaveValue(shows)
+    await closeEditor(page)
+    await expect(editor(page)).toBeHidden()
+    await expect(discardDialog(page)).toBeHidden()
+  }
+
+  await test.step('another question', () => overtake(() => openEditor(page, other), other))
+  await test.step('a new question', () => overtake(() => openNewEditor(page), ''))
 })

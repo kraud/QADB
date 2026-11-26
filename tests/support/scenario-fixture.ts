@@ -79,6 +79,17 @@ export function addAttribute(
   return json<Scenario>(request.put(`/api/scenarios/${scenario.id}`, { data }))
 }
 
+/** Adds options with these labels after the existing ones of an attribute. */
+export function addOptions(request: APIRequestContext, scenario: Scenario, attributeName: string, labels: string[]) {
+  const attributes = scenario.attributes.map((attribute) =>
+    attribute.name === attributeName
+      ? { ...attribute, options: [...attribute.options, ...labels.map((label) => option(label, 'green'))] }
+      : attribute,
+  )
+  const data = { scenario: { name: scenario.name, attributes } }
+  return json<Scenario>(request.put(`/api/scenarios/${scenario.id}`, { data }))
+}
+
 /** Attribute values naming exactly these options, with an entry for every attribute. */
 export function optionValues(scenario: Scenario, labels: Record<string, string[]>): AttributeValues {
   const unknown = Object.keys(labels).filter((name) => !scenario.attributes.some((a) => a.name === name))

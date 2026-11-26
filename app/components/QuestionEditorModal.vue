@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AttributeValues, Scenario } from '#shared/scenario/types'
-import { defaultValues, missingAttributeIds } from '#shared/scenario/values'
+import { defaultValues, missingAttributeIds, orderedOptionIds } from '#shared/scenario/values'
 import type { QuestionWithStats } from '#shared/types/qadb'
 import { renderMarkdown } from '~/utils/markdown'
 
@@ -36,18 +36,14 @@ const initial = reactive({ question: '', answer: '', link: '', values: '' })
 
 const isEdit = computed(() => !!props.questionId)
 const title = computed(() => (isEdit.value ? 'Edit question' : 'Add question'))
-const attributes = computed(() => props.scenario?.attributes ?? [])
+/** The definition the open editor works with, read again on opening: the page's may be out of date. */
+const definition = shallowRef<Scenario | null>(null)
+const attributes = computed(() => definition.value?.attributes ?? [])
 
-/**
- * An entry for every attribute of the scenario: its known options, in option order, and never two
- * for single selection.
- */
+/** An entry for every attribute the editor knows, with everything chosen for it. */
 function normalized(from: AttributeValues): AttributeValues {
   return Object.fromEntries(
-    attributes.value.map((attribute) => {
-      const chosen = attribute.options.map((o) => o.id).filter((id) => from[attribute.id]?.includes(id))
-      return [attribute.id, attribute.selectionMode === 'single' ? chosen.slice(0, 1) : chosen]
-    }),
+    attributes.value.map((attribute) => [attribute.id, orderedOptionIds(attribute, from[attribute.id] ?? [])]),
   )
 }
 
@@ -101,31 +97,58 @@ function reset() {
   valueErrors.value = {}
 }
 
+/** Counts the openings and closings: only the load of the current opening may fill the form. */
+let latestLoad = 0
+onBeforeUnmount(() => latestLoad++)
+
+/** Reads the question being edited, if any, and then the scenario, and fills the form from them. */
+async function load(request: number) {
+  let stored: QuestionWithStats | undefined
+  if (props.questionId) {
+    try {
+      stored = await api<QuestionWithStats>(`/api/questions/${props.questionId}`)
+    } catch {
+      if (request === latestLoad) serverError.value = 'Could not load this question.'
+    }
+  }
+  if (request !== latestLoad) return
+  // After the question, so that the definition knows everything the question holds.
+  if (props.scenario) {
+    let fresh = props.scenario
+    try {
+      fresh = await api<Scenario>(`/api/scenarios/${encodeURIComponent(fresh.id)}`)
+    } catch {
+      // The page's definition will do: saving keeps whatever it does not know.
+    }
+    if (request !== latestLoad) return
+    definition.value = fresh
+  }
+
+  if (stored) {
+    question.value = stored.question
+    answer.value = stored.answer
+    values.value = normalized(stored.values)
+    link.value = stored.link ?? ''
+    mastered.value = stored.mastered === 1
+    if (definition.value) valueErrors.value = requiredMessages(definition.value, values.value)
+  } else if (!props.questionId && definition.value) {
+    // Only a new question starts with the defaults: a stored one shows what it has.
+    values.value = normalized(defaultValues(definition.value))
+  }
+  markUnchanged()
+  loading.value = false
+}
+
 watch(
   () => props.open,
-  async (open) => {
+  (open) => {
+    const request = ++latestLoad
     if (!open) return
     reset()
-    // Only a new question starts with the defaults: a stored one shows what it has.
-    if (!props.questionId && props.scenario) values.value = normalized(defaultValues(props.scenario))
+    definition.value = props.scenario ?? null
     markUnchanged()
-    if (props.questionId) {
-      loading.value = true
-      try {
-        const q = await api<QuestionWithStats>(`/api/questions/${props.questionId}`)
-        question.value = q.question
-        answer.value = q.answer
-        values.value = normalized(q.values)
-        link.value = q.link ?? ''
-        mastered.value = q.mastered === 1
-        if (props.scenario) valueErrors.value = requiredMessages(props.scenario, values.value)
-        markUnchanged()
-      } catch {
-        serverError.value = 'Could not load this question.'
-      } finally {
-        loading.value = false
-      }
-    }
+    loading.value = true
+    load(request)
   },
 )
 
@@ -152,11 +175,12 @@ function mapServerError(e: { statusCode?: number; data?: unknown }) {
 }
 
 async function save() {
-  if (!props.scenario) return
+  const scenario = definition.value
+  if (!scenario || loading.value) return
   fieldErrors.question = question.value.trim() ? '' : 'The question is required.'
   fieldErrors.answer = answer.value.trim() ? '' : 'An answer is required.'
   const chosen = normalized(values.value)
-  valueErrors.value = requiredMessages(props.scenario, chosen)
+  valueErrors.value = requiredMessages(scenario, chosen)
   if (fieldErrors.question || fieldErrors.answer || Object.keys(valueErrors.value).length) return
 
   const body = {
@@ -175,7 +199,7 @@ async function save() {
         body: { ...body, link: link.value.trim(), mastered: mastered.value ? 1 : 0 },
       })
     } else {
-      await api(`/api/scenarios/${encodeURIComponent(props.scenario.id)}/questions`, {
+      await api(`/api/scenarios/${encodeURIComponent(scenario.id)}/questions`, {
         method: 'POST',
         body: { ...body, link: link.value.trim() || undefined },
       })
@@ -328,7 +352,7 @@ function requestDelete() {
 
       <div class="modal-foot">
         <Btn variant="secondary" @click="attemptClose">Cancel</Btn>
-        <Btn type="submit" :loading="saving">Save</Btn>
+        <Btn type="submit" :loading="saving" :disabled="loading">Save</Btn>
       </div>
     </form>
   </Modal>

@@ -32,7 +32,8 @@ const notFound = computed(
     (!!question.value && question.value.scenarioId !== sid.value),
 )
 
-async function retry() {
+/** Reads the question and its scenario again, to retry or after an edit. */
+async function reload() {
   await Promise.all([refreshScenario(), refresh()])
 }
 
@@ -133,7 +134,7 @@ function practiceOne() {
         :question-id="id"
         :scenario="scenario"
         @close="editorOpen = false"
-        @saved="refresh"
+        @saved="reload"
         @request-delete="editorOpen = false; confirmOpen = true"
       />
       <ConfirmDialog
@@ -146,7 +147,7 @@ function practiceOne() {
     </template>
 
     <Empty v-else-if="error || scenarioError" title="Couldn't load this question" text="Something went wrong fetching it. Check your connection and try again.">
-      <Btn variant="secondary" size="sm" @click="retry">Try again</Btn>
+      <Btn variant="secondary" size="sm" @click="reload">Try again</Btn>
     </Empty>
 
     <div v-else>

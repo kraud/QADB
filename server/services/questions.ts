@@ -3,7 +3,7 @@ import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, sql
 import { createError } from 'h3'
 import type { Filters, parseQuestionQuery, SortDir, SortKey } from '../../shared/scenario/query'
 import type { Attribute, AttributeValues, Scenario } from '../../shared/scenario/types'
-import { validateValues } from '../../shared/scenario/values'
+import { missingAttributeIds, validateValues } from '../../shared/scenario/values'
 import type { AttemptRow, QuestionWithStats } from '../../shared/types/qadb'
 import { attempts, attributes, options, questionOptions, questions, scenarios } from '../../db/schema'
 import type { Db } from '../utils/db'
@@ -328,7 +328,26 @@ export async function createQuestion(
   return readQuestion(db, scenario, id)
 }
 
-/** Changes what is given. `values`, when given, replaces all of the question's values. */
+/**
+ * Throws 422 unless the values sent suit the scenario and, laid over what the question holds, fill
+ * every required attribute.
+ */
+async function requireValidChange(db: Db, scenario: Scenario, id: string, values: AttributeValues) {
+  const stored = (await readQuestion(db, scenario, id)).values
+  const issues = validateValues(scenario, values, { requireAll: false })
+  // What was sent wins; an empty list there leaves nothing.
+  for (const attributeId of missingAttributeIds(scenario, { ...stored, ...values })) {
+    const { name } = scenario.attributes.find((attribute) => attribute.id === attributeId)!
+    issues.push({ path: ['values', attributeId], message: `${name} is required` })
+  }
+  if (issues.length) throw createError({ statusCode: 422, statusMessage: 'Validation failed', data: issues })
+}
+
+/**
+ * Changes what is given. `values`, when given, replaces the options of the attributes it names (an
+ * empty list clears one); the others keep theirs, so that a client that does not know an attribute
+ * cannot wipe it.
+ */
 export async function updateQuestion(
   db: Db,
   userId: string,
@@ -337,7 +356,7 @@ export async function updateQuestion(
 ): Promise<QuestionWithStats> {
   const scenario = await requireQuestionScenario(db, userId, id)
   const { values, link, ...columns } = changes
-  if (values) requireValidValues(scenario, values)
+  if (values) await requireValidChange(db, scenario, id, values)
 
   const update = db
     .update(questions)
@@ -357,13 +376,21 @@ export async function updateQuestion(
     await db.batch([
       // First, so the transaction holds the write lock before the guard looks.
       update,
-      db.delete(questionOptions).where(eq(questionOptions.question_id, id)),
+      db.delete(questionOptions).where(
+        and(
+          eq(questionOptions.question_id, id),
+          inArray(
+            questionOptions.option_id,
+            db.select({ id: options.id }).from(options).where(inArray(options.attribute_id, Object.keys(values))),
+          ),
+        ),
+      ),
       ...optionRows(id, values).map((row) => db.insert(questionOptions).values(row)),
       guardValues(db, id),
     ])
   } catch (err) {
     // The question or its scenario changed under us: 404 or 422 if that explains the failure.
-    requireValidValues(await requireQuestionScenario(db, userId, id), values)
+    await requireValidChange(db, await requireQuestionScenario(db, userId, id), id, values)
     throw err
   }
   // Read afresh: the definition may have changed in a way the values survive.
