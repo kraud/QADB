@@ -80,14 +80,16 @@ IDs are text (cuid2), timestamps unix milliseconds.
 
 - `scripts/db/migrate.mjs` is the only way to change the schema. It applies each pending migration
   and records it in `_migrations` in one transaction. A database that already has the baseline tables
-  is only marked. Remote addresses need `--allow-remote`. `drizzle-kit push` must not be used: it
-  can drop data.
+  is only marked. It reads the address and auth token from the environment only, and remote addresses
+  need `--allow-remote`. Pushing a schema straight to a database can drop data, so the project has no
+  tool or configuration for it (a test keeps it so).
 - `0001-scenarios` replaced the fixed difficulty, importance and category columns: it creates a
   "Front-end interview questions" scenario for each user with questions, converts the values to
   `question_options`, removes five named test accounts, and verifies counts, option sets and foreign
   keys before committing. Any unmapped value or failed check changes nothing.
-- `reset-local.mjs` restores the local database from a backup. `seed-demo.mjs` creates the two demo
-  scenarios for one user, on local databases only.
+- `reset-local.mjs` restores the local database from a backup, refusing a source file inside the
+  directory it clears. `seed-demo.mjs` creates the two demo scenarios for one user, on local
+  databases only.
 
 ### Scenario rules
 
@@ -96,7 +98,9 @@ IDs are text (cuid2), timestamps unix milliseconds.
 - Default options (one in single mode, any number in multiple) preselect new questions only.
 - Required attributes must be filled on new questions and when values are edited.
 - The editor saves the whole scenario in one request. Changes that affect questions need a choice,
-  or the server answers 409 with the conflicts and their counts:
+  or the server answers 409 with the conflicts and their counts. The editor then reads the scenario
+  again, discards every earlier confirmation and asks about each change with the current counts (also
+  on later saves from the same form); the form keeps its edits.
 
 | Change | Choice |
 |---|---|
@@ -136,7 +140,13 @@ directly. Deleting a scenario requires its name and removes its questions and at
 
 A question on the wire is `{ id, scenarioId, question, answer, link, mastered, created_at,
 updated_at, values, incomplete, stats }`. `values` maps every attribute ID to its chosen option IDs
-in option order. Updating `values` replaces all of them; other updates do not revalidate them.
+in option order. Updating `values` replaces the options of the attributes it names (an empty list
+clears one) and keeps those of the others, so a client that does not know an attribute cannot wipe
+it. The values sent must suit the scenario, and the question as it would then be stored must fill
+every required attribute. Updates without `values` do not revalidate them.
+
+Creating and updating a question accept only the fields listed: an unknown one is a 422 and nothing
+is written, so a client of another version cannot save part of its input and report success.
 
 Bulk actions: **set** and **clear** (optional attributes only) in single mode; **add**, **replace**
 and **remove** in multiple mode. A request naming a foreign question or option, or one that would
@@ -179,6 +189,8 @@ without attempts), `lastAnsweredAt`, `lastCorrect`. **Never been done** means no
 | `/scenarios/[sid]/content` | Table, filters, sort, selection, bulk editing, question editor |
 | `/scenarios/[sid]/questions/[id]` | Detail with the full track record |
 | `/scenarios/[sid]/practice`, `.../practice/random` | Selected and random practice |
+| `/content`, `/practice`, `/practice/random` | Old addresses: redirect to `/` |
+| `/questions/[id]` | Old address: redirects to the question in its scenario, or the 404 page |
 
 Columns, filters, sort choices, editor fields, badges and practice metadata are generated from the
 scenario's attributes, in their order. The header has a scenario switcher; Random Question applies to
@@ -188,7 +200,10 @@ the current scenario and is hidden outside one.
   (with a toast). Selected rows can be practiced, in table order or shuffled, or edited in bulk. On
   narrow screens (960px, 720px) filters collapse and the table becomes cards.
 - **Editor:** a segmented control for single mode with up to 4 options, otherwise chips. Answers are
-  Markdown with a sanitized preview and an AI "Format" button.
+  Markdown with a sanitized preview and an AI "Format" button. On opening it reads the question and
+  then the scenario again (falling back to the page's definition if that fails), and only the latest
+  opening may fill the form. It saves every attribute it knows, `[]` when cleared, and never drops a
+  chosen option merely because its definition does not list it.
 
 ### Practice sessions
 
