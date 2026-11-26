@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui'
 
-const props = withDefaults(
+/**
+ * A dialog that never closes itself: Escape and a click on the backdrop only ask (`close`), so the
+ * owner can keep it open, for instance over unsaved changes.
+ */
+withDefaults(
   defineProps<{
     open?: boolean
     role?: 'dialog' | 'alertdialog'
@@ -12,62 +16,63 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'close'): void }>()
 
-const root = ref<HTMLElement | null>(null)
+// There is no trigger button for Reka to go back to: remember what had the focus.
+let opener: HTMLElement | null = null
 
-function trapFocus(e: KeyboardEvent) {
-  if (e.key !== 'Tab') return
-  // Disabled controls take no focus, so they cannot be where tabbing turns around.
-  const focusable = root.value?.querySelectorAll<HTMLElement>(
-    'button:enabled, input:enabled, textarea:enabled, select:enabled, a[href]',
-  )
-  if (!focusable || focusable.length === 0) return
-  const first = focusable[0]!
-  const last = focusable[focusable.length - 1]!
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
+/** The first field, or the first control where there is none. */
+async function focusFirst(event: Event) {
+  event.preventDefault()
+  const dialog = event.target as HTMLElement
+  opener = document.activeElement as HTMLElement | null
+  await nextTick()
+  const first =
+    dialog.querySelector<HTMLElement>('input:enabled, textarea:enabled') ??
+    dialog.querySelector<HTMLElement>('button:enabled, a[href]')
+  ;(first ?? dialog)?.focus()
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    emit('close')
-    return
-  }
-  trapFocus(e)
+function focusOpener(event: Event) {
+  event.preventDefault()
+  if (opener?.isConnected) opener.focus()
 }
 
-function onOverlayClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) emit('close')
+/**
+ * A button that disables itself (while saving) drops the focus to the page, where Reka no longer
+ * hears Tab: the topmost dialog takes it back.
+ */
+function keepTab(event: KeyboardEvent) {
+  const at = document.activeElement
+  if (event.key !== 'Tab' || !(at === document.body || at?.matches(':disabled'))) return
+  const dialog = [...document.querySelectorAll<HTMLElement>('.overlay > .modal')].at(-1)
+  if (!dialog) return
+  event.preventDefault()
+  dialog.focus()
 }
 
-watch(
-  () => props.open,
-  (open) => {
-    if (open) {
-      nextTick(() => {
-        root.value?.querySelector<HTMLElement>('input, textarea, select, button')?.focus()
-      })
-    }
-  },
-)
+onMounted(() => document.addEventListener('keydown', keepTab))
+onBeforeUnmount(() => document.removeEventListener('keydown', keepTab))
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="open" ref="root" class="overlay" @click="onOverlayClick" @keydown="onKeydown">
-      <div
-        class="modal"
-        :role="role"
-        aria-modal="true"
-        :aria-label="ariaLabel"
-        :style="maxWidth ? { maxWidth } : undefined"
-      >
-        <slot />
-      </div>
-    </div>
-  </Teleport>
+  <DialogRoot :open="open" @update:open="$event || emit('close')">
+    <DialogPortal>
+      <DialogOverlay class="overlay">
+        <DialogContent
+          class="modal"
+          :role="role"
+          aria-modal="true"
+          :aria-label="ariaLabel"
+          :aria-describedby="undefined"
+          :style="maxWidth ? { maxWidth } : undefined"
+          @open-auto-focus="focusFirst"
+          @close-auto-focus="focusOpener"
+        >
+          <VisuallyHidden as-child>
+            <DialogTitle as="span">{{ ariaLabel }}</DialogTitle>
+          </VisuallyHidden>
+          <slot />
+        </DialogContent>
+      </DialogOverlay>
+    </DialogPortal>
+  </DialogRoot>
 </template>

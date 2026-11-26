@@ -39,7 +39,7 @@ watch(
   async (saving) => {
     if (saving || !props.conflicts.length) return
     await nextTick()
-    body.value?.closest('.modal')?.querySelector<HTMLElement>('select, button:enabled')?.focus()
+    body.value?.closest('.modal')?.querySelector<HTMLElement>('button:enabled')?.focus()
   },
 )
 

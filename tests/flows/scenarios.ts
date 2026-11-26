@@ -71,12 +71,12 @@ export function scenarioNameField(page: Page): Locator {
 
 /** The attribute cards, in order. */
 export function attributeCards(page: Page): Locator {
-  return page.getByRole('group', { name: /^Attribute: / })
+  return page.getByRole('group', { name: /^Attribute: /, includeHidden: true })
 }
 
 /** The card of a named attribute. */
 export function attributeCard(page: Page, name: string): Locator {
-  return page.getByRole('group', { name: `Attribute: ${name}`, exact: true })
+  return page.getByRole('group', { name: `Attribute: ${name}`, exact: true, includeHidden: true })
 }
 
 export function attributeNameField(card: Locator): Locator {
@@ -85,11 +85,12 @@ export function attributeNameField(card: Locator): Locator {
 
 /** The option rows of a card, in order. */
 export function optionRows(card: Locator): Locator {
-  return card.getByRole('group', { name: /^Option: / })
+  // Hidden ones included: an open dialog hides the form behind it from role queries.
+  return card.getByRole('group', { name: /^Option: /, includeHidden: true })
 }
 
 export function optionRow(card: Locator, label: string): Locator {
-  return card.getByRole('group', { name: `Option: ${label}`, exact: true })
+  return card.getByRole('group', { name: `Option: ${label}`, exact: true, includeHidden: true })
 }
 
 export function optionLabelField(row: Locator): Locator {

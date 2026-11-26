@@ -46,7 +46,8 @@ export function questionCards(page: Page): Locator {
 }
 
 export function questionRow(page: Page, text: string): Locator {
-  return page.getByRole('row').filter({ hasText: text })
+  // Hidden ones included: an open dialog hides the list behind it from role queries.
+  return page.getByRole('row', { includeHidden: true }).filter({ hasText: text })
 }
 
 // The app draws its own box over each native checkbox, so these clicks are forced; they land on the

@@ -137,6 +137,19 @@ async function load(request: number) {
   }
   markUnchanged()
   loading.value = false
+  await nextTick()
+  focusQuestion()
+}
+
+const modalBody = ref<HTMLElement | null>(null)
+
+/** The fields were not there when the dialog opened: take the focus to them, unless it was moved. */
+function focusQuestion() {
+  const dialog = modalBody.value?.closest('.modal')
+  const at = document.activeElement
+  if (at === document.body || at === dialog || at === dialog?.querySelector('[aria-label="Close"]')) {
+    modalBody.value?.querySelector<HTMLElement>('textarea')?.focus()
+  }
 }
 
 watch(
@@ -225,13 +238,6 @@ function discard() {
   emit('close')
 }
 
-watch(confirmDiscardOpen, (open) => {
-  if (open) return
-  nextTick(() => {
-    document.querySelector<HTMLElement>('.overlay')?.querySelector<HTMLElement>('input, textarea, select, button')?.focus()
-  })
-})
-
 async function formatWithAi() {
   if (!answer.value.trim() || formatting.value) return
   formatting.value = true
@@ -264,7 +270,7 @@ function requestDelete() {
     </div>
 
     <form novalidate @submit.prevent="save">
-      <div class="modal-body">
+      <div ref="modalBody" class="modal-body">
         <div v-if="serverError" class="alert alert-error" style="margin-bottom: 14px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
           <span>{{ serverError }}</span>
