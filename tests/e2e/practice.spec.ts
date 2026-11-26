@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { visit } from '../flows/auth'
 import {
@@ -27,6 +27,22 @@ const SECOND = 'Second: what is a generator?'
 const THIRD = 'Third: what is a proxy?'
 
 let scenario: Scenario
+
+/** Keeps the page's matching requests waiting until released; the server then answers them. */
+async function hold(page: Page, method: string, path: string) {
+  const held: Route[] = []
+  await page.route(`**${path}`, (route) => {
+    if (route.request().method() !== method) return route.fallback()
+    held.push(route)
+  })
+  return {
+    waiting: () => held.length,
+    async release() {
+      await expect.poll(() => held.length).toBeGreaterThan(0)
+      for (const route of held.splice(0)) await route.continue()
+    },
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   await resetUserData(page.request)
@@ -346,4 +362,90 @@ test('a question that fails to load offers a retry', async ({ page }) => {
 
   await expect(currentQuestion(page)).toHaveText(FIRST)
   await expect(practiceProgress(page)).toHaveText('Question 1 of 1')
+})
+
+test('Next and the mastered switch wait while an answer is being recorded', async ({ page }) => {
+  await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
+  await openContent(page, scenario.id)
+  await startSelectedPractice(page, [FIRST, SECOND], true)
+  const attempt = await hold(page, 'POST', '/api/attempts')
+  await showAnswer(page)
+
+  await page.getByRole('button', { name: 'Correct', exact: true }).click()
+
+  await expect(page.getByRole('button', { name: 'Next question' })).toBeDisabled()
+  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).toBeDisabled()
+  await attempt.release()
+  await expect(page.getByText('Track record — 1 practiced')).toBeVisible()
+  await expect(currentQuestion(page)).toHaveText(FIRST)
+  await expect(page.getByRole('button', { name: 'Next question' })).toBeEnabled()
+  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).toBeEnabled()
+})
+
+test('a mastered response arriving after moving on leaves the current card alone', async ({ page }) => {
+  const [first] = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
+  await openContent(page, scenario.id)
+  await startSelectedPractice(page, [FIRST, SECOND], true)
+  await expect(currentQuestion(page)).toHaveText(FIRST)
+  const update = await hold(page, 'PATCH', `/api/questions/${first}`)
+  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await nextQuestion(page)
+  await expect(currentQuestion(page)).toHaveText(SECOND)
+
+  await update.release()
+
+  await expect(page.locator('.toast', { hasText: 'Marked as mastered' })).toBeVisible()
+  await expect(currentQuestion(page)).toHaveText(SECOND)
+  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).not.toBeChecked()
+})
+
+test('a failed mastered request arriving after moving on does not reload the current card', async ({ page }) => {
+  const [first] = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
+  await openContent(page, scenario.id)
+  await startSelectedPractice(page, [FIRST, SECOND], true)
+  await expect(currentQuestion(page)).toHaveText(FIRST)
+  const update = await hold(page, 'PATCH', `/api/questions/${first}`)
+  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await nextQuestion(page)
+  await expect(currentQuestion(page)).toHaveText(SECOND)
+  await showAnswer(page)
+
+  await deleteQuestion(page.request, first!)
+  await update.release()
+
+  await expect(page.getByText('Could not update this question')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show answer' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Correct', exact: true })).toBeVisible()
+  await expect(practiceProgress(page)).toHaveText('Question 2 of 2')
+})
+
+test('overlapping loads of a deleted question drop only that question', async ({ page }) => {
+  const [first] = await seedQuestions(page.request, scenario, [
+    { question: FIRST },
+    { question: SECOND },
+    { question: THIRD },
+  ])
+  await openContent(page, scenario.id)
+  await startSelectedPractice(page, [FIRST, SECOND, THIRD], true)
+  await expect(currentQuestion(page)).toHaveText(FIRST)
+  const update = await hold(page, 'PATCH', `/api/questions/${first}`)
+  const attempt = await hold(page, 'POST', '/api/attempts')
+  const read = await hold(page, 'GET', `/api/questions/${first}`)
+  await showAnswer(page)
+  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await page.getByRole('button', { name: 'Correct', exact: true }).click()
+
+  // Both requests find the question gone, and each makes the session read it again.
+  await deleteQuestion(page.request, first!)
+  await update.release()
+  await expect.poll(read.waiting).toBe(1)
+  await attempt.release()
+  await expect.poll(read.waiting).toBe(2)
+  await read.release()
+
+  await expect(currentQuestion(page)).toHaveText(SECOND)
+  await expect(practiceProgress(page)).toHaveText('Question 1 of 2')
+  await nextQuestion(page)
+  await expect(currentQuestion(page)).toHaveText(THIRD)
+  await expect(practiceProgress(page)).toHaveText('Question 2 of 2')
 })

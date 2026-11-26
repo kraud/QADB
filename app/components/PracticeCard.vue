@@ -55,6 +55,7 @@ const blurred = ref(true)
       <Switch
         :model-value="question.mastered === 1"
         size="sm"
+        :disabled="grading"
         aria-label="Mark as mastered"
         @update:model-value="emit('mastered', $event)"
       />
@@ -75,7 +76,7 @@ const blurred = ref(true)
 
     <div class="practice-next">
       <span></span>
-      <Btn variant="secondary" @click="emit('next')">{{ nextLabel }}</Btn>
+      <Btn variant="secondary" :disabled="grading" @click="emit('next')">{{ nextLabel }}</Btn>
     </div>
   </div>
 </template>

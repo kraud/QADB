@@ -29,6 +29,11 @@ const nextLabel = computed(() => (props.mode === 'random' ? 'Next random questio
 let left = false
 onBeforeUnmount(() => (left = true))
 
+/** Whether a newer load, or leaving, has made this one's answers worthless. */
+type Superseded = () => boolean
+/** Counts the loads; only the newest one may change what is shown or queued. */
+let latestLoad = 0
+
 /** The stored session is this screen's: same mode, same scenario, something queued. */
 const hasSession = () => store.mode === props.mode && store.scenarioId === props.sid && store.queue.length > 0
 
@@ -50,9 +55,9 @@ async function loadScenario(): Promise<boolean> {
 }
 
 /** Starts a random session over all of the scenario's questions. */
-async function startRandom() {
+async function startRandom(superseded: Superseded) {
   const ids = await api<{ id: string }[]>(`/api/scenarios/${encodeURIComponent(props.sid)}/questions/ids`)
-  if (left) return false
+  if (superseded()) return false
   if (ids.length) store.start('random', shuffle(ids.map((x) => x.id)), props.sid)
   return ids.length > 0
 }
@@ -64,8 +69,8 @@ async function leave(message?: string) {
 }
 
 /** Shows the current question, passing over the ones deleted since the session started. */
-async function showCurrent() {
-  while (!atEnd.value) {
+async function showCurrent(superseded: Superseded) {
+  while (!superseded() && !atEnd.value) {
     const id = store.queue[store.index]!
     let found: Q | null = null
     try {
@@ -73,67 +78,74 @@ async function showCurrent() {
     } catch (err) {
       if (statusOf(err) !== 404) throw err
       // The whole scenario may be gone.
-      if (left || !(await loadScenario())) return
+      if (superseded() || !(await loadScenario())) return
     }
-    if (left) return
+    if (superseded()) return
     if (found?.scenarioId === props.sid) {
       question.value = found
       return
     }
-    store.drop()
+    // `drop` removes whatever is current, so make sure that still is the one that failed.
+    if (store.queue[store.index] === id) store.drop()
     if (!store.queue.length) {
-      if (props.mode === 'random' && (await startRandom())) continue
-      if (!left) await leave('No questions to practice')
+      if (props.mode === 'random' && (await startRandom(superseded))) continue
+      if (!superseded()) await leave('No questions to practice')
       return
     }
   }
-  question.value = null
+  if (!superseded()) question.value = null
 }
 
 /** Runs one loading step, showing the skeleton meanwhile and the retry panel if it fails. */
-async function load(step: () => Promise<void>) {
+async function load(step: (superseded: Superseded) => Promise<void>) {
+  const request = ++latestLoad
+  const superseded = () => left || request !== latestLoad
   loading.value = true
   loadError.value = false
   try {
-    await step()
+    await step(superseded)
   } catch {
+    if (superseded()) return
     question.value = null
     loadError.value = true
-  } finally {
-    loading.value = false
   }
+  if (!superseded()) loading.value = false
 }
 
-async function setup() {
+async function setup(superseded: Superseded) {
   if (!(await loadScenario())) return
   if (!hasSession()) {
     // A curated queue only comes from a selection; a session of another scenario stays untouched.
     if (props.mode === 'curated') return leave()
-    if (!(await startRandom())) {
-      if (!left) await leave('No questions to practice')
+    if (!(await startRandom(superseded))) {
+      if (!superseded()) await leave('No questions to practice')
       return
     }
   }
-  await showCurrent()
+  await showCurrent(superseded)
 }
 
 const loadQuestion = () => load(showCurrent)
 const retry = () => load(scenario.value && hasSession() ? showCurrent : setup)
 
+/** The card still shows this question: an answer about it may change what is shown. */
+const isCurrent = (id: string) => !left && question.value?.id === id && store.queue[store.index] === id
+
 async function grade(correct: boolean) {
   if (!question.value || grading.value) return
+  const { id } = question.value
   grading.value = true
   try {
     await api('/api/attempts', {
       method: 'POST',
-      body: { questionId: question.value.id, correct: correct ? 1 : 0 },
+      body: { questionId: id, correct: correct ? 1 : 0 },
     })
     toast(correct ? 'Correct — recorded' : 'Incorrect — recorded')
-    await loadQuestion()
+    if (isCurrent(id)) await loadQuestion()
   } catch (err) {
     toast('Could not record your answer')
     // Deleted meanwhile: move on to the next one.
-    if (statusOf(err) === 404) {
+    if (statusOf(err) === 404 && isCurrent(id)) {
       revealed.value = false
       await loadQuestion()
     }
@@ -144,16 +156,17 @@ async function grade(correct: boolean) {
 
 async function toggleMastered(v: boolean) {
   if (!question.value) return
+  const { id } = question.value
   try {
-    const updated = await api<QuestionWithStats>(`/api/questions/${question.value.id}`, {
+    const updated = await api<QuestionWithStats>(`/api/questions/${id}`, {
       method: 'PATCH',
       body: { mastered: v ? 1 : 0 },
     })
-    question.value = { ...question.value, mastered: updated.mastered }
+    if (isCurrent(id)) question.value = { ...question.value!, mastered: updated.mastered }
     toast(v ? 'Marked as mastered' : 'Mastered flag removed')
   } catch (err) {
     toast('Could not update this question')
-    if (statusOf(err) === 404) {
+    if (statusOf(err) === 404 && isCurrent(id)) {
       revealed.value = false
       await loadQuestion()
     }

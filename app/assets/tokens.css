@@ -235,6 +235,8 @@ p { text-wrap: pretty; }
 .switch.sm .track::after { width: 14px; height: 14px; }
 .switch.sm input:checked + .track::after { transform: translateX(12px); }
 .switch.teal input:checked + .track { background: var(--teal); }
+.switch input:disabled { cursor: not-allowed; }
+.switch input:disabled + .track { opacity: .5; }
 
 /* checkbox */
 .checkbox { position: relative; display: inline-flex; width: 18px; height: 18px; flex: none; }

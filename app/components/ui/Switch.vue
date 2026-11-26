@@ -6,6 +6,7 @@ withDefaults(
     color?: 'accent' | 'teal'
     label?: string
     ariaLabel?: string
+    disabled?: boolean
   }>(),
   { size: 'md', color: 'accent' },
 )
@@ -17,6 +18,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
     <input
       type="checkbox"
       :checked="modelValue"
+      :disabled="disabled"
       :aria-label="ariaLabel"
       @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
     />
