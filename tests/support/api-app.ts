@@ -33,6 +33,7 @@ const ROUTES: [RouterMethod, string, () => Promise<{ default: EventHandler }>][]
   ['get', '/api/scenarios/:sid/questions', () => import('../../server/api/scenarios/[sid]/questions/index.get')],
   ['post', '/api/scenarios/:sid/questions', () => import('../../server/api/scenarios/[sid]/questions/index.post')],
   ['get', '/api/scenarios/:sid/questions/ids', () => import('../../server/api/scenarios/[sid]/questions/ids.get')],
+  ['patch', '/api/scenarios/:sid/questions/bulk', () => import('../../server/api/scenarios/[sid]/questions/bulk.patch')],
   ['get', '/api/questions/:id', () => import('../../server/api/questions/[id].get')],
   ['patch', '/api/questions/:id', () => import('../../server/api/questions/[id].patch')],
   ['delete', '/api/questions/:id', () => import('../../server/api/questions/[id].delete')],
