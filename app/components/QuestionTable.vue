@@ -63,7 +63,10 @@ function last(q: QuestionWithStats): string {
               @update:model-value="emit('toggle', q.id)"
             />
           </td>
-          <td class="col-q"><span class="q-cell">{{ q.question }}</span></td>
+          <td class="col-q">
+            <span class="q-cell">{{ q.question }}</span>
+            <Badge v-if="q.incomplete" tone="incomplete" class="q-flag">Incomplete</Badge>
+          </td>
           <td v-for="attribute in scenario.attributes" :key="attribute.id">
             <AttributeBadges :scenario="{ attributes: [attribute] }" :values="q.values" />
           </td>
@@ -112,6 +115,7 @@ function last(q: QuestionWithStats): string {
         <div class="q">{{ q.question }}</div>
       </div>
       <div class="meta-row">
+        <Badge v-if="q.incomplete" tone="incomplete">Incomplete</Badge>
         <AttributeBadges v-if="scenario.attributes.length" :scenario="scenario" :values="q.values" />
         <Badge v-if="q.mastered" tone="mastered"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l6 6L20 6" /></svg>Done</Badge>
       </div>

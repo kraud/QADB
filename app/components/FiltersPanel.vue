@@ -94,6 +94,15 @@ function onOpChange(e: Event) {
       />
     </div>
 
+    <div v-if="scenario.attributes.length" class="filter-group" role="group" aria-label="Missing values">
+      <p class="filter-title">Missing values <span class="tip">— required ones</span></p>
+      <Switch
+        :model-value="filters.incomplete"
+        label="Incomplete"
+        @update:model-value="filters.incomplete = $event; emit('change')"
+      />
+    </div>
+
     <div class="filter-footer">
       <span class="active-count"><b>{{ activeCount }}</b> active</span>
       <Btn variant="ghost" size="sm" @click="emit('reset')">Reset filters</Btn>

@@ -127,6 +127,80 @@ export async function toggleFiltersPanel(page: Page) {
   await page.getByRole('button', { name: /^Filters/ }).click()
 }
 
+// ─── incomplete questions ────────────────────────────────────────────────
+
+/** The banner counting the incomplete questions; absent when there are none. */
+export function incompleteBanner(page: Page): Locator {
+  return page.getByRole('region', { name: 'Incomplete questions' })
+}
+
+export async function showIncomplete(page: Page) {
+  await reloadingList(page, () => incompleteBanner(page).getByRole('button', { name: 'Show' }).click())
+}
+
+export function incompleteSwitch(page: Page): Locator {
+  return filtersPanel(page).getByRole('checkbox', { name: 'Incomplete', exact: true })
+}
+
+export async function toggleIncompleteFilter(page: Page) {
+  // Drawn over, like the checkboxes.
+  await reloadingList(page, () => incompleteSwitch(page).click({ force: true }))
+}
+
+// ─── bulk editing ────────────────────────────────────────────────────────
+
+/** Selects a question's card in the list shown on narrow screens. */
+export async function selectCard(page: Page, text: string) {
+  await page.locator('.mcard').filter({ hasText: text }).getByRole('checkbox').check({ force: true })
+}
+
+export function bulkDialog(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Edit attributes' })
+}
+
+export async function openBulkEditor(page: Page) {
+  await page.getByRole('button', { name: 'Edit attributes', exact: true }).click()
+  await bulkDialog(page).waitFor()
+}
+
+export function bulkAttribute(page: Page): Locator {
+  return bulkDialog(page).getByRole('combobox', { name: 'Attribute' })
+}
+
+export function bulkAction(page: Page): Locator {
+  return bulkDialog(page).getByRole('combobox', { name: 'Action' })
+}
+
+export async function chooseBulkAttribute(page: Page, label: string) {
+  await bulkAttribute(page).selectOption({ label })
+}
+
+export async function chooseBulkAction(page: Page, label: 'Set' | 'Clear' | 'Add' | 'Replace' | 'Remove') {
+  await bulkAction(page).selectOption({ label })
+}
+
+/** An option in the bulk dialog; `aria-pressed` says whether it is chosen. */
+export function bulkOption(page: Page, name: string): Locator {
+  return bulkDialog(page).getByRole('button', { name, exact: true })
+}
+
+export async function toggleBulkOption(page: Page, name: string) {
+  await bulkOption(page, name).click()
+}
+
+export function applyButton(page: Page): Locator {
+  return bulkDialog(page).getByRole('button', { name: 'Apply' })
+}
+
+/** Applies the change and waits for the list to be read again. The caller asserts the outcome. */
+export async function applyBulk(page: Page) {
+  await reloadingList(page, () => applyButton(page).click())
+}
+
+export async function cancelBulk(page: Page) {
+  await bulkDialog(page).getByRole('button', { name: 'Cancel' }).click()
+}
+
 // ─── editor ──────────────────────────────────────────────────────────────
 
 /** The add/edit dialog. */

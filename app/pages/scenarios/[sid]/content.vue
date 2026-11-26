@@ -31,6 +31,7 @@ const loadError = ref(false)
 const hasLoaded = ref(false)
 const mobileFiltersOpen = ref(false)
 
+const bulkOpen = ref(false)
 const editorOpen = ref(false)
 const editingId = ref<string | null>(null)
 const confirmOpen = ref(false)
@@ -42,6 +43,11 @@ const notFound = computed(() => scenarioError.value?.statusCode === 404)
 
 const activeCount = computed(() => (scenario.value ? countActiveFilters(filters, scenario.value) : 0))
 const hasActiveFilters = computed(() => activeCount.value > 0)
+const hasAttributes = computed(() => !!scenario.value?.attributes.length)
+const selectedQuestions = computed(() => {
+  const ids = new Set(selection.value)
+  return questions.value.filter((q) => ids.has(q.id))
+})
 
 function orderSelection() {
   const order = questions.value.map((q) => q.id)
@@ -83,6 +89,12 @@ async function fetchQuestions() {
   loading.value = false
 }
 
+/** After a change to the questions: the list, and the scenario for its incomplete count. */
+function reload() {
+  refreshScenario()
+  fetchQuestions()
+}
+
 /** Reloads whatever failed: the scenario, the list, or both. */
 async function retry() {
   if (!scenario.value) await refreshScenario()
@@ -104,6 +116,13 @@ onBeforeUnmount(() => {
 function resetFilters() {
   clearTimeout(searchTimer)
   Object.assign(filters, emptyFilters())
+  fetchQuestions()
+}
+
+/** Lists exactly the questions the banner counts: no other filter may hide any of them. */
+function showIncomplete() {
+  clearTimeout(searchTimer)
+  Object.assign(filters, emptyFilters(), { incomplete: true })
   fetchQuestions()
 }
 
@@ -155,7 +174,13 @@ function deleteQuestion(id: string) {
 function onEditorSaved() {
   editorOpen.value = false
   toast(editingId.value ? 'Question updated' : 'Question added')
-  fetchQuestions()
+  reload()
+}
+
+function onBulkApplied(updated: number) {
+  bulkOpen.value = false
+  toast(`${updated} question${updated === 1 ? '' : 's'} updated`)
+  reload()
 }
 
 function onEditorRequestDelete(id: string) {
@@ -171,11 +196,17 @@ async function onDeleteConfirmed(id: string) {
   await api(`/api/questions/${id}`, { method: 'DELETE' })
   selection.value = selection.value.filter((x) => x !== id)
   toast('Question deleted')
-  fetchQuestions()
+  reload()
 }
 
 watch([sortKey, sortDir], fetchQuestions)
-onMounted(fetchQuestions)
+const nuxtApp = useNuxtApp()
+onMounted(() => {
+  fetchQuestions()
+  // Coming from a page that shows the same scenario keeps what that one read, from before any
+  // change made there: read it again, unless that is already under way.
+  if (!nuxtApp.isHydrating) refreshScenario({ dedupe: 'defer' })
+})
 </script>
 
 <template>
@@ -197,6 +228,8 @@ onMounted(fetchQuestions)
         Add question
       </Btn>
     </div>
+
+    <IncompleteBanner v-if="hasAttributes" :count="scenario!.incompleteCount" @show="showIncomplete" />
 
     <button type="button" class="btn btn-secondary mobile-filters-btn" @click="mobileFiltersOpen = !mobileFiltersOpen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="width: 14px; height: 14px"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
@@ -222,6 +255,7 @@ onMounted(fetchQuestions)
             <span class="count">{{ selection.length }} selected</span>
             <Switch v-model="followOrder" size="sm" label="Follow current sort/order" />
             <Btn size="sm" @click="startPractice">Start practice</Btn>
+            <Btn v-if="hasAttributes" variant="secondary" size="sm" @click="bulkOpen = true">Edit attributes</Btn>
           </div>
         </div>
 
@@ -288,6 +322,15 @@ onMounted(fetchQuestions)
     @close="editorOpen = false"
     @saved="onEditorSaved"
     @request-delete="onEditorRequestDelete"
+  />
+  <BulkEditDialog
+    v-if="scenario"
+    :open="bulkOpen"
+    :scenario="scenario"
+    :questions="selectedQuestions"
+    @close="bulkOpen = false"
+    @applied="onBulkApplied"
+    @stale="reload"
   />
   <ConfirmDialog
     :open="confirmOpen"

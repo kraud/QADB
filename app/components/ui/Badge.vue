@@ -1,7 +1,7 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    tone?: 'option' | 'mastered' | 'neutral'
+    tone?: 'option' | 'mastered' | 'incomplete' | 'neutral'
     color?: string
   }>(),
   { tone: 'neutral' },
