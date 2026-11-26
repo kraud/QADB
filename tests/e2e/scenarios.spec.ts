@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { visit } from '../flows/auth'
+import { chooseOption, closeList, openList } from '../flows/controls'
 import { answerCurrent, currentQuestion, showAnswer, startSelectedPractice } from '../flows/practice'
 import {
   answerField,
@@ -92,7 +93,12 @@ function savesOf(page: Page) {
   return sent
 }
 
-const switcherOptions = (page: Page) => page.getByRole('combobox', { name: 'Scenario' }).getByRole('option')
+const switcher = (page: Page) => page.getByRole('combobox', { name: 'Scenario' })
+
+async function expectSwitcherLists(page: Page, names: string[]) {
+  await expect(await openList(switcher(page))).toHaveText(names)
+  await closeList(switcher(page))
+}
 
 test('a new user sees "Create your first scenario"', async ({ page }) => {
   await openScenarios(page)
@@ -127,7 +133,7 @@ test('create a scenario with a single and a multiple attribute, then add and pra
   await expect(page).toHaveURL(CONTENT_URL)
   await expect(page.getByText('Scenario created')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
-  await expect(switcherOptions(page)).toHaveText(['All scenarios', 'Finance'])
+  await expectSwitcherLists(page, ['All scenarios', 'Finance'])
   const sid = CONTENT_URL.exec(page.url())![1]!
   const stored = await readScenario(page, sid)
   expect(stored.attributes).toMatchObject([
@@ -179,7 +185,7 @@ test("a new scenario shows none of another scenario's questions", async ({ page 
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
   await expect(page.getByText(FIRST)).toHaveCount(0)
 
-  await page.getByRole('combobox', { name: 'Scenario' }).selectOption(scenario.id)
+  await chooseOption(switcher(page), scenario.name)
   await expect(listedQuestions(page)).toHaveText([FIRST])
 })
 
@@ -315,7 +321,7 @@ test('leaving the editor with changes asks to discard', async ({ page }) => {
     await page.getByRole('navigation').getByRole('link', { name: 'Scenarios' }).click()
     await discard.getByRole('button', { name: 'Discard' }).click()
     await expect(page).toHaveURL('/scenarios')
-    await expect(switcherOptions(page)).toHaveText(['All scenarios', NAME])
+    await expectSwitcherLists(page, ['All scenarios', NAME])
   })
 
   await test.step('undone changes are no changes', async () => {
@@ -353,7 +359,7 @@ test('rename, recolor and reorder show up in the table', async ({ page }) => {
   await expect(page.locator('.qtable th')).toContainText(['Question', 'Importance', 'Level', 'Category'])
   const badge = questionRow(page, FIRST).getByText('Simple', { exact: true })
   await expect(badge).toHaveAttribute('style', /--c-red/)
-  await expect(switcherOptions(page)).toHaveText(['All scenarios', 'Interviews'])
+  await expectSwitcherLists(page, ['All scenarios', 'Interviews'])
   await expect(page.getByRole('complementary').getByRole('group', { name: 'Level' }).getByRole('button')).toHaveText([
     'Medium',
     'Simple',
@@ -435,7 +441,7 @@ test('moving to an option a question already has keeps it once', async ({ page }
   await deleteOption(attributeCard(page, 'Category'), 'CSS')
   await saveScenario(page)
   await expect(changesDialog(page)).toContainText('2 questions use “CSS” (Category).')
-  await optionChoice(page, 'CSS').selectOption({ label: 'Move to JS' })
+  await chooseOption(optionChoice(page, 'CSS'), 'Move to JS')
   await confirmChanges(page)
 
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
@@ -460,7 +466,11 @@ test('single to multiple is applied directly and switches Ordered off', async ({
   const stored = await readScenario(page, scenario.id)
   expect(stored.attributes[0]).toMatchObject({ selectionMode: 'multiple', ordered: false })
   expect(await heldLabels(page, scenario.id, question, 'Difficulty')).toEqual(['Hard'])
-  await expect(page.getByRole('combobox', { name: 'Sort by' }).getByRole('option', { name: 'Difficulty' })).toHaveCount(0)
+  const sort = page.getByRole('combobox', { name: 'Sort by' })
+  const sortable = await openList(sort)
+  await expect(sortable.filter({ hasText: 'Importance' })).toHaveCount(1)
+  await expect(sortable.filter({ hasText: 'Difficulty' })).toHaveCount(0)
+  await closeList(sort)
   await openEditor(page, FIRST)
   await chooseEditorOption(page, 'Difficulty', 'Easy')
   await saveEditor(page)
@@ -486,17 +496,18 @@ test('delete an option in use: move; then delete another: leave empty', async ({
     const dialog = changesDialog(page)
     await expect(dialog).toContainText('1 question uses “Hard” (Difficulty).')
     // Only the options that stay in this attribute.
-    await expect(optionChoice(page, 'Hard').getByRole('option')).toHaveText([
-      'Choose…',
+    await expect(optionChoice(page, 'Hard')).toHaveText('Choose…')
+    await expect(await openList(optionChoice(page, 'Hard'))).toHaveText([
       'Move to Easy',
       'Move to Medium',
       'Move to Expert',
       'Leave empty',
     ])
+    await closeList(optionChoice(page, 'Hard'))
     await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     expect(saves).toEqual([])
 
-    await optionChoice(page, 'Hard').selectOption({ label: 'Move to Expert' })
+    await chooseOption(optionChoice(page, 'Hard'), 'Move to Expert')
     await confirmChanges(page)
 
     await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
@@ -512,7 +523,7 @@ test('delete an option in use: move; then delete another: leave empty', async ({
 
     const dialog = changesDialog(page)
     await expect(dialog).toContainText('1 question uses “Easy” (Difficulty).')
-    await optionChoice(page, 'Easy').selectOption({ label: 'Leave empty' })
+    await chooseOption(optionChoice(page, 'Easy'), 'Leave empty')
     await expect(dialog).toContainText('Difficulty is required: questions left without an option become incomplete.')
     await confirmChanges(page)
 
@@ -611,7 +622,7 @@ test('questions that changed since the editor opened are reported and nothing ty
   const third = await seedQuestion(page.request, scenario, { question: 'Third', difficulty: 'hard' })
   await saveScenario(page)
   await expect(dialog).toContainText('2 questions use “Hard” (Difficulty).')
-  await optionChoice(page, 'Hard').selectOption({ label: 'Move to Expert' })
+  await chooseOption(optionChoice(page, 'Hard'), 'Move to Expert')
   await confirmChanges(page)
 
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
@@ -639,15 +650,15 @@ test('after a refused save every destructive change is confirmed again, with cur
   // Written elsewhere while the dialog is open: more of what is being confirmed, and something new.
   await seedQuestion(page.request, scenario, { question: SECOND, difficulty: 'easy' })
   await seedQuestion(page.request, scenario, { question: 'Third', difficulty: 'hard' })
-  await optionChoice(page, 'Easy').selectOption({ label: 'Move to Medium' })
+  await chooseOption(optionChoice(page, 'Easy'), 'Move to Medium')
   await confirmChanges(page)
 
   await expect(dialog).toContainText('Questions changed since you opened the editor.')
   await expect(dialog).toContainText('2 questions use “Easy” (Difficulty).')
   await expect(dialog).toContainText('1 question uses “Hard” (Difficulty).')
   // Nothing chosen before counts, and the keyboard is still in the dialog.
-  await expect(optionChoice(page, 'Easy').locator('option:checked')).toHaveText('Choose…')
-  await expect(optionChoice(page, 'Hard').locator('option:checked')).toHaveText('Choose…')
+  await expect(optionChoice(page, 'Easy')).toHaveText('Choose…')
+  await expect(optionChoice(page, 'Hard')).toHaveText('Choose…')
   await expect(optionChoice(page, 'Easy')).toBeFocused()
   await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   // The edits are still in the form, and nothing is stored.
@@ -655,8 +666,8 @@ test('after a refused save every destructive change is confirmed again, with cur
   await expect(optionRow(card, 'Expert')).toBeVisible()
   expect(await heldLabels(page, scenario.id, first, 'Difficulty')).toEqual(['Easy'])
 
-  await optionChoice(page, 'Easy').selectOption({ label: 'Move to Medium' })
-  await optionChoice(page, 'Hard').selectOption({ label: 'Move to Expert' })
+  await chooseOption(optionChoice(page, 'Easy'), 'Move to Medium')
+  await chooseOption(optionChoice(page, 'Hard'), 'Move to Expert')
   await confirmChanges(page)
 
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
@@ -684,7 +695,7 @@ test('a refused save whose counts cannot be read asks again from fresh counts ne
   await page.unroute(url)
   await saveScenario(page)
   await expect(changesDialog(page)).toContainText('1 question uses “Hard” (Difficulty).')
-  await optionChoice(page, 'Hard').selectOption({ label: 'Leave empty' })
+  await chooseOption(optionChoice(page, 'Hard'), 'Leave empty')
   await confirmChanges(page)
   await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
 })
@@ -720,7 +731,7 @@ test('delete a scenario by typing its name', async ({ page }) => {
   await expect(page.getByText('Scenario deleted')).toBeVisible()
   await expect(scenarioCard(page, NAME)).toHaveCount(0)
   await expect(scenarioCard(page, 'Kept')).toBeVisible()
-  await expect(switcherOptions(page)).toHaveText(['All scenarios', 'Kept'])
+  await expectSwitcherLists(page, ['All scenarios', 'Kept'])
   expect((await page.context().cookies()).filter((c) => c.name === 'qadb_scenario' && c.value)).toEqual([])
   const stored = await page.evaluate(() => sessionStorage.getItem('qadb:practice'))
   expect(JSON.parse(stored!)).toMatchObject({ scenarioId: '', queue: [] })

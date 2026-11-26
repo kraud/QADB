@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route, type Locator } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import {
   applyBulk,
@@ -25,6 +25,7 @@ import {
   toggleBulkOption,
   toggleFilterChip,
 } from '../flows/questions'
+import { closeList, openList } from '../flows/controls'
 import { deleteQuestion, fetchQuestion, resetUserData, seedQuestions } from '../support/reset'
 import {
   addAttribute,
@@ -78,6 +79,12 @@ function routeList(page: Page, handle: (route: Route) => unknown) {
 const editButton = (page: Page) => page.getByRole('button', { name: 'Edit attributes', exact: true })
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search questions' })
 
+/** The options a select offers. */
+async function expectLists(select: Locator, labels: string[]) {
+  await expect(await openList(select)).toHaveText(labels)
+  await closeList(select)
+}
+
 test('bulk set fixes all selected; fixed rows leave the filtered selection', async ({ page }) => {
   const ids = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
   const changed = await addAttribute(page.request, scenario, {
@@ -91,8 +98,8 @@ test('bulk set fixes all selected; fixed rows leave the filtered selection', asy
   await openBulkEditor(page)
 
   // The dialog starts at what the selection is missing.
-  await expect(bulkAttribute(page).locator('option:checked')).toHaveText('Level')
-  await expect(bulkAction(page).getByRole('option')).toHaveText(['Set'])
+  await expect(bulkAttribute(page)).toHaveText('Level')
+  await expectLists(bulkAction(page), ['Set'])
   await expect(applyButton(page)).toBeDisabled()
   await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose an option.')
   await toggleBulkOption(page, 'Junior')
@@ -128,7 +135,7 @@ test('bulk add, replace and remove on a multiple attribute', async ({ page }) =>
   await test.step('add never duplicates', async () => {
     await openBulkEditor(page)
     await chooseBulkAttribute(page, 'Category')
-    await expect(bulkAction(page).getByRole('option')).toHaveText(['Add', 'Replace', 'Remove'])
+    await expectLists(bulkAction(page), ['Add', 'Replace', 'Remove'])
     await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose at least one option.')
     await toggleBulkOption(page, 'CSS')
     await expect(bulkDialog(page).getByRole('status')).toHaveText('1 question will change.')
@@ -153,10 +160,10 @@ test('bulk add, replace and remove on a multiple attribute', async ({ page }) =>
     await expect(bulkDialog(page).getByRole('button', { pressed: true })).toHaveCount(0)
     await toggleBulkOption(page, 'React')
     await chooseBulkAttribute(page, 'Difficulty')
-    await expect(bulkAction(page).locator('option:checked')).toHaveText('Set')
+    await expect(bulkAction(page)).toHaveText('Set')
     await expect(bulkDialog(page).getByRole('button', { pressed: true })).toHaveCount(0)
     await chooseBulkAttribute(page, 'Category')
-    await expect(bulkAction(page).locator('option:checked')).toHaveText('Add')
+    await expect(bulkAction(page)).toHaveText('Add')
     await expect(bulkDialog(page).getByRole('button', { pressed: true })).toHaveCount(0)
   })
 
@@ -204,9 +211,9 @@ test('bulk clear on an optional attribute', async ({ page }) => {
   await openBulkEditor(page)
 
   await chooseBulkAttribute(page, 'Difficulty')
-  await expect(bulkAction(page).getByRole('option')).toHaveText(['Set']) // required: no Clear
+  await expectLists(bulkAction(page), ['Set']) // required: no Clear
   await chooseBulkAttribute(page, 'Region')
-  await expect(bulkAction(page).getByRole('option')).toHaveText(['Set', 'Clear'])
+  await expectLists(bulkAction(page), ['Set', 'Clear'])
   await chooseBulkAction(page, 'Clear')
   await expect(bulkDialog(page).getByRole('button', { name: 'North' })).toHaveCount(0)
   await expect(bulkDialog(page).getByRole('status')).toHaveText('1 question will change.')
@@ -456,8 +463,8 @@ test('a chosen attribute deleted elsewhere must be picked again', async ({ page 
 
   await applyButton(page).click()
 
-  await expect(bulkAttribute(page).getByRole('option')).toHaveText(['Choose…', 'Region'])
-  await expect(bulkAttribute(page).locator('option:checked')).toHaveText('Choose…')
+  await expectLists(bulkAttribute(page), ['Region'])
+  await expect(bulkAttribute(page)).toHaveText('Choose…')
   await expect(bulkAction(page)).toBeDisabled()
   await expect(applyButton(page)).toBeDisabled()
   await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose an attribute.')
@@ -466,7 +473,7 @@ test('a chosen attribute deleted elsewhere must be picked again', async ({ page 
   expect((await fetchQuestion(page.request, id)).values[region!.id]).toEqual(values[region!.id])
 
   await chooseBulkAttribute(page, 'Region')
-  await expect(bulkAction(page).locator('option:checked')).toHaveText('Set')
+  await expect(bulkAction(page)).toHaveText('Set')
   await expect(applyButton(page)).toBeDisabled()
 })
 
@@ -481,9 +488,9 @@ test('an action the attribute no longer allows must be picked again', async ({ p
 
   await applyButton(page).click()
 
-  await expect(bulkAction(page).getByRole('option')).toHaveText(['Choose…', 'Add', 'Replace', 'Remove'])
-  await expect(bulkAction(page).locator('option:checked')).toHaveText('Choose…')
-  await expect(bulkAttribute(page).locator('option:checked')).toHaveText('Team')
+  await expectLists(bulkAction(page), ['Add', 'Replace', 'Remove'])
+  await expect(bulkAction(page)).toHaveText('Choose…')
+  await expect(bulkAttribute(page)).toHaveText('Team')
   await expect(applyButton(page)).toBeDisabled()
   await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose an action.')
   await expect(bulkDialog(page).getByRole('alert')).toHaveText(CHANGED)

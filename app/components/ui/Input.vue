@@ -7,13 +7,12 @@ const props = withDefaults(
     label?: string
     /** Names the control when its label is drawn elsewhere. */
     ariaLabel?: string
-    type?: 'text' | 'password' | 'textarea' | 'select' | 'number' | 'url' | 'email'
+    type?: 'text' | 'password' | 'textarea' | 'number' | 'url' | 'email'
     modelValue?: string
     placeholder?: string
     helper?: string
     error?: string
     required?: boolean
-    options?: { value: string; label: string }[]
     name?: string
     autocomplete?: string
     min?: string | number
@@ -47,9 +46,6 @@ function onInput(e: Event) {
       @input="onInput"
     />
 
-    <select v-else-if="type === 'select'" :id="id" class="select" :value="modelValue" @change="onInput">
-      <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
-    </select>
 
     <div v-else-if="toggleable && type === 'password'" class="input-wrap">
       <input

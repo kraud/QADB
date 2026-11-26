@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { visit } from '../flows/auth'
+import { chooseOption } from '../flows/controls'
 import {
   answerCurrent,
   currentQuestion,
@@ -306,7 +307,7 @@ test('random practice stays inside the current scenario', async ({ page }) => {
   expect(await practiceAll(mine.length)).toEqual([...mine].sort())
 
   // The finished session of the first scenario is still stored.
-  await page.getByRole('combobox', { name: 'Scenario' }).selectOption(other.id)
+  await chooseOption(page.getByRole('combobox', { name: 'Scenario' }), other.name)
   await expect(page).toHaveURL(`/scenarios/${other.id}/content`)
   await startRandomPractice(page)
   await expect(page).toHaveURL(`/scenarios/${other.id}/practice/random`)

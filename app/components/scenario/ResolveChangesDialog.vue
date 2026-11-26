@@ -112,19 +112,15 @@ function close() {
       <div v-for="item in items" :key="item.key" class="change-item">
         <p>{{ item.text }}</p>
         <template v-if="item.choice">
-          <select
+          <Select
             v-model="choices[item.choice.optionId]"
-            class="select"
             :aria-label="item.choice.label"
             :disabled="saving"
-          >
-            <!-- `undefined` until the first choice, which must show the placeholder too -->
-            <option :value="undefined" disabled>Choose…</option>
-            <option v-for="target in item.choice.targets" :key="target.value" :value="target.value">
-              Move to {{ target.label }}
-            </option>
-            <option :value="LEAVE_EMPTY">Leave empty</option>
-          </select>
+            :options="[
+              ...item.choice.targets.map((t) => ({ value: t.value, label: `Move to ${t.label}` })),
+              { value: LEAVE_EMPTY, label: 'Leave empty' },
+            ]"
+          />
           <p v-if="choices[item.choice.optionId] === LEAVE_EMPTY && item.choice.warning" class="change-warning">
             {{ item.choice.warning }}
           </p>

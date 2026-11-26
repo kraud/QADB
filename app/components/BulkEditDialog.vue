@@ -173,7 +173,7 @@ async function apply() {
     saving.value = false
     // Apply was disabled meanwhile, which dropped the focus: take it back.
     await nextTick()
-    body.value?.closest('.modal')?.querySelector<HTMLElement>('select:enabled')?.focus()
+    body.value?.closest('.modal')?.querySelector<HTMLElement>('[role="combobox"]:enabled')?.focus()
   }
 }
 
@@ -196,30 +196,24 @@ function close() {
 
         <div class="field">
           <label :for="`${uid}-attribute`">Attribute</label>
-          <select
+          <Select
             :id="`${uid}-attribute`"
-            class="select"
-            :value="attribute?.id ?? ''"
+            :model-value="attribute?.id"
+            :options="scenario.attributes.map((a) => ({ value: a.id, label: a.name }))"
             :disabled="saving"
-            @change="chooseAttribute(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-if="!attribute" value="" disabled>Choose…</option>
-            <option v-for="a in scenario.attributes" :key="a.id" :value="a.id">{{ a.name }}</option>
-          </select>
+            @update:model-value="chooseAttribute"
+          />
         </div>
 
         <div class="field">
           <label :for="`${uid}-action`">Action</label>
-          <select
+          <Select
             :id="`${uid}-action`"
-            class="select"
-            :value="action ?? ''"
+            :model-value="action"
+            :options="actions.map((a) => ({ value: a, label: LABELS[a] }))"
             :disabled="saving || !attribute"
-            @change="chooseAction(($event.target as HTMLSelectElement).value as BulkAction)"
-          >
-            <option v-if="!action" value="" disabled>Choose…</option>
-            <option v-for="a in actions" :key="a" :value="a">{{ LABELS[a] }}</option>
-          </select>
+            @update:model-value="chooseAction($event as BulkAction)"
+          />
         </div>
 
         <div v-if="attribute && action && action !== 'clear'" class="field" role="group" :aria-labelledby="`${uid}-options`">

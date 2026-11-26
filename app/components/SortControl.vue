@@ -8,22 +8,23 @@ const emit = defineEmits<{
   (e: 'update:sortDir', v: SortDir): void
 }>()
 
-const ordered = computed(() => props.attributes.filter((attribute) => attribute.ordered))
+const options = computed(() => [
+  { value: '', label: 'Sort by · Default' },
+  ...props.attributes.filter((attribute) => attribute.ordered).map((a) => ({ value: `attr:${a.id}`, label: a.name })),
+  { value: 'pct', label: 'Track record %' },
+  { value: 'amount', label: 'Track record amount' },
+])
 </script>
 
 <template>
   <div class="sort-ctl">
-    <select
-      class="select"
+    <Select
       aria-label="Sort by"
-      :value="sortKey"
-      @change="emit('update:sortKey', ($event.target as HTMLSelectElement).value as SortKey)"
-    >
-      <option value="">Sort by · Default</option>
-      <option v-for="attribute in ordered" :key="attribute.id" :value="`attr:${attribute.id}`">{{ attribute.name }}</option>
-      <option value="pct">Track record %</option>
-      <option value="amount">Track record amount</option>
-    </select>
+      size="sm"
+      :model-value="sortKey"
+      :options="options"
+      @update:model-value="emit('update:sortKey', $event as SortKey)"
+    />
     <button
       class="dir-btn"
       :aria-label="sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'"

@@ -37,8 +37,10 @@ function onAmountInput(e: Event) {
   emit('change')
 }
 
-function onOpChange(e: Event) {
-  props.filters.op = (e.target as HTMLSelectElement).value as Filters['op']
+const operatorOptions = ['all', '>', '<', '='].map((value) => ({ value, label: value }))
+
+function onOpChange(op: string) {
+  props.filters.op = op as typeof props.filters.op
   emit('change')
 }
 </script>
@@ -74,12 +76,7 @@ function onOpChange(e: Event) {
     <div class="filter-group" role="group" aria-label="Track record amount">
       <p class="filter-title">Track record amount</p>
       <div class="filter-row">
-        <select class="select" aria-label="Operator" :value="filters.op" @change="onOpChange">
-          <option value="all">all</option>
-          <option value=">">&gt;</option>
-          <option value="<">&lt;</option>
-          <option value="=">=</option>
-        </select>
+        <Select aria-label="Operator" size="sm" :model-value="filters.op" :options="operatorOptions" @update:model-value="onOpChange" />
         <input class="input num" type="number" min="0" step="1" :value="filters.n || ''" placeholder="0" aria-label="Practice count" :disabled="filters.op === 'all'" @input="onAmountInput" />
       </div>
     </div>

@@ -288,5 +288,5 @@ test('Reset filters shows every question again, including never practiced ones',
   await expect(listedQuestions(page)).toHaveText(ALL)
   await expect(searchBox).toHaveValue('')
   await expect(filtersPanel(page).getByText('0 active')).toBeVisible()
-  await expect(page.getByRole('combobox', { name: 'Operator' })).toHaveValue('all')
+  await expect(page.getByRole('combobox', { name: 'Operator' })).toHaveText('all')
 })

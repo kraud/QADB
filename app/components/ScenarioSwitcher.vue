@@ -2,19 +2,20 @@
 import type { ScenarioSummary } from '#shared/types/qadb'
 import { contentPath } from '~/utils/scenario-route'
 
-defineProps<{ scenarios: ScenarioSummary[]; currentId?: string }>()
+const props = defineProps<{ scenarios: ScenarioSummary[]; currentId?: string }>()
 
-function open(e: Event) {
-  const id = (e.target as HTMLSelectElement).value
+const options = computed(() => [
+  { value: '', label: 'All scenarios' },
+  ...props.scenarios.map((s) => ({ value: s.id, label: s.name })),
+])
+
+function open(id: string) {
   navigateTo(id ? contentPath(id) : '/scenarios')
 }
 </script>
 
 <template>
   <div class="scenario-switcher">
-    <select class="select" aria-label="Scenario" :value="currentId ?? ''" @change="open">
-      <option value="" :selected="!currentId">All scenarios</option>
-      <option v-for="s in scenarios" :key="s.id" :value="s.id" :selected="s.id === currentId">{{ s.name }}</option>
-    </select>
+    <Select aria-label="Scenario" size="sm" :model-value="currentId ?? ''" :options="options" @update:model-value="open" />
   </div>
 </template>

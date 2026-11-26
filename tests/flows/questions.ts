@@ -2,6 +2,7 @@
 // CSS locators are used only where the app gives an element no accessible name or role.
 import type { Locator, Page } from '@playwright/test'
 import { visit } from './auth'
+import { chooseOption } from './controls'
 
 /** Option labels are those of the front-end scenario fixture. */
 export interface QuestionInput {
@@ -62,7 +63,7 @@ export async function sortBy(
   page: Page,
   label: 'Difficulty' | 'Importance' | 'Track record %' | 'Track record amount',
 ) {
-  await reloadingList(page, () => page.getByRole('combobox', { name: 'Sort by' }).selectOption({ label }))
+  await reloadingList(page, () => chooseOption(page.getByRole('combobox', { name: 'Sort by' }), label))
 }
 
 export async function toggleSortDirection(page: Page) {
@@ -112,7 +113,7 @@ export async function chooseFilterOption(
 }
 
 export async function chooseAmountOperator(page: Page, operator: 'all' | '>' | '<' | '=') {
-  await reloadingList(page, () => page.getByRole('combobox', { name: 'Operator' }).selectOption(operator))
+  await reloadingList(page, () => chooseOption(page.getByRole('combobox', { name: 'Operator' }), operator))
 }
 
 export async function setPracticeCount(page: Page, count: number) {
@@ -180,11 +181,11 @@ export function bulkAction(page: Page): Locator {
 }
 
 export async function chooseBulkAttribute(page: Page, label: string) {
-  await bulkAttribute(page).selectOption({ label })
+  await chooseOption(bulkAttribute(page), label)
 }
 
 export async function chooseBulkAction(page: Page, label: 'Set' | 'Clear' | 'Add' | 'Replace' | 'Remove') {
-  await bulkAction(page).selectOption({ label })
+  await chooseOption(bulkAction(page), label)
 }
 
 /** An option in the bulk dialog; `aria-pressed` says whether it is chosen. */
