@@ -5,6 +5,8 @@ import { useId } from 'vue'
 const props = withDefaults(
   defineProps<{
     label?: string
+    /** Names the textarea when its label is drawn elsewhere. */
+    ariaLabel?: string
     type?: 'text' | 'password' | 'textarea' | 'select' | 'number' | 'url' | 'email'
     modelValue?: string
     placeholder?: string
@@ -38,6 +40,7 @@ function onInput(e: Event) {
       v-if="type === 'textarea'"
       :id="id"
       class="textarea"
+      :aria-label="ariaLabel"
       :value="modelValue"
       :placeholder="placeholder"
       :required="required"

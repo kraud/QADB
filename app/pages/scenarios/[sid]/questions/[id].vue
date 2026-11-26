@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { AttemptRow, QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { fmtDT } from '~/utils/format'
 import { renderMarkdown } from '~/utils/markdown'
+import { contentPath, practicePath } from '~/utils/scenario-route'
 
 const route = useRoute()
 const api = useApi()
@@ -11,18 +11,30 @@ const practice = usePracticeStore()
 
 type QuestionDetail = QuestionWithStats & { attempts: AttemptRow[] }
 
+const sid = computed(() => String(route.params.sid))
 const id = computed(() => String(route.params.id))
 
-const { data: question, pending, error, refresh } = await useAsyncData(
+const { scenario, error: scenarioError, refresh: refreshScenario } = useScenario(sid)
+const { data: question, error, refresh } = await useAsyncData(
   () => `question-${id.value}`,
-  () => api<QuestionDetail>(`/api/questions/${id.value}`),
+  () => api<QuestionDetail>(`/api/questions/${encodeURIComponent(id.value)}`),
 )
 
 const editorOpen = ref(false)
 const confirmOpen = ref(false)
 const togglingMastered = ref(false)
 
-const notFound = computed(() => error.value?.statusCode === 404)
+/** Missing or someone else's, or a question that belongs to another scenario than the URL says. */
+const notFound = computed(
+  () =>
+    scenarioError.value?.statusCode === 404 ||
+    error.value?.statusCode === 404 ||
+    (!!question.value && question.value.scenarioId !== sid.value),
+)
+
+async function retry() {
+  await Promise.all([refreshScenario(), refresh()])
+}
 
 async function toggleMastered(v: boolean) {
   togglingMastered.value = true
@@ -39,12 +51,12 @@ async function toggleMastered(v: boolean) {
 async function confirmDelete() {
   await api(`/api/questions/${id.value}`, { method: 'DELETE' })
   toast('Question deleted')
-  await navigateTo('/content')
+  await navigateTo(contentPath(sid.value))
 }
 
 function practiceOne() {
-  practice.start('curated', [id.value])
-  navigateTo('/practice')
+  practice.start('curated', [id.value], sid.value)
+  navigateTo(practicePath(sid.value))
 }
 </script>
 
@@ -54,11 +66,11 @@ function practiceOne() {
       <p class="code">404 · PAGE NOT FOUND</p>
       <h1>This page doesn't exist.</h1>
       <p>The link may be broken, or the page moved.</p>
-      <Btn to="/content">Back to content</Btn>
+      <Btn :to="scenario && !scenarioError ? contentPath(sid) : '/'">Back to content</Btn>
     </div>
 
-    <template v-else-if="question">
-      <NuxtLink class="back-link" to="/content">
+    <template v-else-if="question && scenario">
+      <NuxtLink class="back-link" :to="contentPath(sid)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" /></svg>
         Back to content
       </NuxtLink>
@@ -66,9 +78,7 @@ function practiceOne() {
       <div class="detail-head">
         <h1>{{ question.question }}</h1>
         <div class="badge-row">
-          <Badge tone="diff" :color="DIFFICULTY_COLOR[question.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[question.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge>
-          <Badge tone="imp" :color="IMPORTANCE_COLOR[question.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[question.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge>
-          <span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in question.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span>
+          <AttributeBadges v-if="scenario.attributes.length" :scenario="scenario" :values="question.values" />
           <span class="mastered-ctl" :class="{ on: question.mastered === 1 }">
             <Switch
               :model-value="question.mastered === 1"
@@ -83,13 +93,13 @@ function practiceOne() {
         <div class="detail-actions">
           <Btn variant="secondary" size="sm" @click="editorOpen = true">Edit</Btn>
           <Btn variant="danger" size="sm" @click="confirmOpen = true">Delete</Btn>
-          <Btn v-if="question.link" variant="secondary" size="sm" :href="question.link">Open original question →</Btn>
+          <Btn v-if="question.link" variant="secondary" size="sm" :href="question.link">Open link →</Btn>
         </div>
       </div>
 
       <div class="callout">
-        <div class="callout-label">Answer summary</div>
-        <div class="md" v-html="renderMarkdown(question.answer_summary)"></div>
+        <div class="callout-label">Answer</div>
+        <div class="md" v-html="renderMarkdown(question.answer)"></div>
       </div>
 
       <div class="detail-meta"><h2>Track record</h2></div>
@@ -121,6 +131,7 @@ function practiceOne() {
       <QuestionEditorModal
         :open="editorOpen"
         :question-id="id"
+        :scenario="scenario"
         @close="editorOpen = false"
         @saved="refresh"
         @request-delete="editorOpen = false; confirmOpen = true"
@@ -134,7 +145,11 @@ function practiceOne() {
       />
     </template>
 
-    <div v-else-if="pending" class="detail-wrap">
+    <Empty v-else-if="error || scenarioError" title="Couldn't load this question" text="Something went wrong fetching it. Check your connection and try again.">
+      <Btn variant="secondary" size="sm" @click="retry">Try again</Btn>
+    </Empty>
+
+    <div v-else>
       <Skeleton height="32px" width="60%" />
       <Skeleton height="88px" style="margin-top: 18px" />
     </div>

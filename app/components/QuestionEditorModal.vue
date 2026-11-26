@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import type { AttributeValues, Scenario } from '#shared/scenario/types'
+import { defaultValues, missingAttributeIds } from '#shared/scenario/values'
 import type { QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { renderMarkdown } from '~/utils/markdown'
 
-const props = defineProps<{ open: boolean; questionId: string | null }>()
+const props = defineProps<{
+  open: boolean
+  questionId: string | null
+  /** Where the question belongs; its attributes are the editor's fields. */
+  scenario: Scenario | null | undefined
+}>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved'): void
@@ -16,49 +22,83 @@ const { toast } = useToast()
 const question = ref('')
 const answer = ref('')
 const answerMode = ref<'markdown' | 'display'>('markdown')
-const difficulty = ref('medium')
-const importance = ref('mid')
-const categories = ref<string[]>(['JS'])
+const values = ref<AttributeValues>({})
 const link = ref('')
 const mastered = ref(false)
 const saving = ref(false)
 const formatting = ref(false)
 const loading = ref(false)
 const serverError = ref('')
-const fieldErrors = reactive({ question: '', answer_summary: '', link: '' })
-const initial = reactive({ question: '', answer: '', link: '' })
+const fieldErrors = reactive({ question: '', answer: '', link: '' })
+/** Error messages by attribute id. */
+const valueErrors = ref<Record<string, string>>({})
+const initial = reactive({ question: '', answer: '', link: '', values: '' })
 
 const isEdit = computed(() => !!props.questionId)
 const title = computed(() => (isEdit.value ? 'Edit question' : 'Add question'))
+const attributes = computed(() => props.scenario?.attributes ?? [])
+
+/**
+ * An entry for every attribute of the scenario: its known options, in option order, and never two
+ * for single selection.
+ */
+function normalized(from: AttributeValues): AttributeValues {
+  return Object.fromEntries(
+    attributes.value.map((attribute) => {
+      const chosen = attribute.options.map((o) => o.id).filter((id) => from[attribute.id]?.includes(id))
+      return [attribute.id, attribute.selectionMode === 'single' ? chosen.slice(0, 1) : chosen]
+    }),
+  )
+}
+
 const hasUnsavedChanges = computed(
   () =>
     question.value.trim() !== initial.question ||
     answer.value.trim() !== initial.answer ||
-    link.value.trim() !== initial.link,
+    link.value.trim() !== initial.link ||
+    JSON.stringify(normalized(values.value)) !== initial.values,
 )
 
-const diffOptions = DIFFICULTY.map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
-const impOptions = IMPORTANCE.map((v) => ({ value: v, label: IMPORTANCE_LABEL[v] }))
 const answerModeOptions = [
   { value: 'markdown', label: 'Markdown' },
   { value: 'display', label: 'Display' },
 ]
 
+/** What is in the form now counts as unchanged. */
+function markUnchanged() {
+  initial.question = question.value.trim()
+  initial.answer = answer.value.trim()
+  initial.link = link.value.trim()
+  initial.values = JSON.stringify(normalized(values.value))
+}
+
+function requiredMessages(scenario: Scenario, chosen: AttributeValues) {
+  const missing = missingAttributeIds(scenario, chosen)
+  return Object.fromEntries(
+    scenario.attributes.filter((a) => missing.includes(a.id)).map((a) => [a.id, `${a.name} is required`]),
+  )
+}
+
+function setValue(attributeId: string, optionIds: string[]) {
+  values.value = { ...values.value, [attributeId]: optionIds }
+  const { [attributeId]: _, ...others } = valueErrors.value
+  valueErrors.value = others
+}
+
 function reset() {
   question.value = ''
   answer.value = ''
   answerMode.value = 'markdown'
-  difficulty.value = 'medium'
-  importance.value = 'mid'
-  categories.value = ['JS']
+  values.value = {}
   link.value = ''
   mastered.value = false
   saving.value = false
   loading.value = false
   serverError.value = ''
   fieldErrors.question = ''
-  fieldErrors.answer_summary = ''
+  fieldErrors.answer = ''
   fieldErrors.link = ''
+  valueErrors.value = {}
 }
 
 watch(
@@ -66,23 +106,20 @@ watch(
   async (open) => {
     if (!open) return
     reset()
-    initial.question = ''
-    initial.answer = ''
-    initial.link = ''
+    // Only a new question starts with the defaults: a stored one shows what it has.
+    if (!props.questionId && props.scenario) values.value = normalized(defaultValues(props.scenario))
+    markUnchanged()
     if (props.questionId) {
       loading.value = true
       try {
         const q = await api<QuestionWithStats>(`/api/questions/${props.questionId}`)
         question.value = q.question
-        answer.value = q.answer_summary
-        difficulty.value = q.difficulty
-        importance.value = q.importance
-        categories.value = q.category.length ? q.category : ['JS']
+        answer.value = q.answer
+        values.value = normalized(q.values)
         link.value = q.link ?? ''
         mastered.value = q.mastered === 1
-        initial.question = question.value.trim()
-        initial.answer = answer.value.trim()
-        initial.link = link.value.trim()
+        if (props.scenario) valueErrors.value = requiredMessages(props.scenario, values.value)
+        markUnchanged()
       } catch {
         serverError.value = 'Could not load this question.'
       } finally {
@@ -93,33 +130,39 @@ watch(
 )
 
 function mapServerError(e: { statusCode?: number; data?: unknown }) {
-  if (e?.statusCode === 422 && Array.isArray(e.data)) {
-    for (const issue of e.data as { path?: unknown[]; message?: string }[]) {
-      const field = issue.path?.[0]
+  // The response body wraps the issues in `data`.
+  const body = e?.data as { data?: unknown } | undefined
+  const issues = Array.isArray(body) ? body : body?.data
+  if (e?.statusCode === 422 && Array.isArray(issues)) {
+    let shown = false
+    for (const issue of issues as { path?: unknown[]; message?: string }[]) {
+      const [field, attributeId] = issue.path ?? []
       if (field === 'question') fieldErrors.question = 'The question is required.'
-      else if (field === 'answer_summary') fieldErrors.answer_summary = 'An answer summary is required.'
+      else if (field === 'answer') fieldErrors.answer = 'An answer is required.'
       else if (field === 'link') fieldErrors.link = 'Enter a valid URL.'
+      else if (field === 'values' && attributes.value.some((a) => a.id === attributeId)) {
+        valueErrors.value = { ...valueErrors.value, [attributeId as string]: issue.message ?? 'Check this value.' }
+      } else continue
+      shown = true
     }
-    if (!fieldErrors.question && !fieldErrors.answer_summary && !fieldErrors.link) {
-      serverError.value = 'Please check your input.'
-    }
+    if (!shown) serverError.value = 'Please check your input.'
   } else {
     serverError.value = 'Something went wrong. Please try again.'
   }
 }
 
 async function save() {
+  if (!props.scenario) return
   fieldErrors.question = question.value.trim() ? '' : 'The question is required.'
-  fieldErrors.answer_summary = answer.value.trim() ? '' : 'An answer summary is required.'
-  if (fieldErrors.question || fieldErrors.answer_summary) return
+  fieldErrors.answer = answer.value.trim() ? '' : 'An answer is required.'
+  const chosen = normalized(values.value)
+  valueErrors.value = requiredMessages(props.scenario, chosen)
+  if (fieldErrors.question || fieldErrors.answer || Object.keys(valueErrors.value).length) return
 
   const body = {
     question: question.value.trim(),
-    answer_summary: answer.value.trim(),
-    difficulty: difficulty.value,
-    importance: importance.value,
-    category: categories.value,
-    link: link.value.trim() || undefined,
+    answer: answer.value.trim(),
+    values: chosen,
   }
 
   saving.value = true
@@ -128,10 +171,14 @@ async function save() {
     if (isEdit.value) {
       await api(`/api/questions/${props.questionId}`, {
         method: 'PATCH',
-        body: { ...body, mastered: mastered.value ? 1 : 0 },
+        // An emptied link is sent as such, so that it is removed.
+        body: { ...body, link: link.value.trim(), mastered: mastered.value ? 1 : 0 },
       })
     } else {
-      await api('/api/questions', { method: 'POST', body })
+      await api(`/api/scenarios/${encodeURIComponent(props.scenario.id)}/questions`, {
+        method: 'POST',
+        body: { ...body, link: link.value.trim() || undefined },
+      })
     }
     emit('saved')
     emit('close')
@@ -178,14 +225,6 @@ async function formatWithAi() {
   }
 }
 
-function toggleCategory(c: Category) {
-  if (categories.value.includes(c)) {
-    if (categories.value.length > 1) categories.value = categories.value.filter((v) => v !== c)
-  } else {
-    categories.value = [...categories.value, c]
-  }
-}
-
 function requestDelete() {
   if (props.questionId) emit('requestDelete', props.questionId)
 }
@@ -213,10 +252,10 @@ function requestDelete() {
         </div>
 
         <template v-else>
-          <Input v-model="question" label="Question" type="textarea" placeholder="The interview prompt" :error="fieldErrors.question" />
+          <Input v-model="question" label="Question" type="textarea" placeholder="What do you want to be asked?" :error="fieldErrors.question" />
           <div class="answer-edit">
             <div class="answer-field-head">
-              <label>Answer summary</label>
+              <label>Answer</label>
               <div class="answer-actions">
                 <Btn
                   v-if="answerMode === 'markdown'"
@@ -248,46 +287,30 @@ function requestDelete() {
               v-show="answerMode === 'markdown'"
               v-model="answer"
               type="textarea"
-              placeholder="What you'd say out loud in the interview — short and spoken-style. **Markdown** supported."
-              :error="fieldErrors.answer_summary"
+              aria-label="Answer"
+              placeholder="Short, as you would say it. **Markdown** supported."
+              :error="fieldErrors.answer"
             />
-            <div v-if="answerMode === 'display'" class="answer-preview md" :class="{ invalid: !!fieldErrors.answer_summary }" v-html="renderMarkdown(answer)" />
-            <div v-if="answerMode === 'display' && fieldErrors.answer_summary" class="field-err">
-              {{ fieldErrors.answer_summary }}
+            <div v-if="answerMode === 'display'" class="answer-preview md" :class="{ invalid: !!fieldErrors.answer }" v-html="renderMarkdown(answer)" />
+            <div v-if="answerMode === 'display' && fieldErrors.answer" class="field-err">
+              {{ fieldErrors.answer }}
             </div>
           </div>
 
-          <div class="field">
-            <label>Difficulty</label>
-            <Seg v-model="difficulty" :options="diffOptions" />
-          </div>
-
-          <div class="field">
-            <label>Importance</label>
-            <Seg v-model="importance" :options="impOptions" />
-          </div>
-
-          <div class="field">
-            <label>Category</label>
-            <div class="chip-group">
-              <Chip
-                v-for="c in CATEGORY"
-                :key="c"
-                :active="categories.includes(c)"
-                :color="CATEGORY_COLOR[c]"
-                :disabled="categories.length === 1 && categories.includes(c)"
-                @click="toggleCategory(c)"
-              >
-                {{ c }}
-              </Chip>
-            </div>
-          </div>
+          <AttributeField
+            v-for="attribute in attributes"
+            :key="attribute.id"
+            :attribute="attribute"
+            :model-value="values[attribute.id] ?? []"
+            :error="valueErrors[attribute.id]"
+            @update:model-value="setValue(attribute.id, $event)"
+          />
 
           <Input
             v-model="link"
-            label="Link to original GreatFrontend question"
+            label="Link"
             type="url"
-            placeholder="https://www.greatfrontend.com/questions/…"
+            placeholder="https://example.com/…"
             :error="fieldErrors.link"
           />
 

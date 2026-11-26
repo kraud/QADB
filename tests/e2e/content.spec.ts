@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { Scenario } from '../../shared/scenario/types'
 import {
   chooseAmountOperator,
   chooseFilterOption,
@@ -15,6 +16,7 @@ import {
   toggleSortDirection,
 } from '../flows/questions'
 import { recordAttempt, resetUserData, seedQuestions, type SeedQuestion } from '../support/reset'
+import { createFrontendScenario } from '../support/scenario-fixture'
 
 const ALPHA = 'Alpha: what is a closure?'
 const BETA = 'Beta: how does flexbox work?'
@@ -35,18 +37,21 @@ const BANK: SeedQuestion[] = [
 
 /** Seeds the standard bank and opens the list with every question showing. */
 async function openBank(page: Page) {
-  const ids = await seedQuestions(page.request, BANK)
-  await openContent(page)
+  const ids = await seedQuestions(page.request, scenario, BANK)
+  await openContent(page, scenario.id)
   await expect(listedQuestions(page)).toHaveText(ALL)
   return ids
 }
 
+let scenario: Scenario
+
 test.beforeEach(async ({ page }) => {
   await resetUserData(page.request)
+  scenario = await createFrontendScenario(page.request)
 })
 
 test('empty bank shows "No questions yet"', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
 
   await expect(page.getByRole('heading', { name: 'No questions yet' })).toBeVisible()
   await expect(page.getByText('Add your first question to start building your bank.')).toBeVisible()
@@ -153,12 +158,12 @@ test('search matches every word', async ({ page }) => {
   const loop = 'How does the event loop work?'
   const delegation = 'What is event delegation?'
   const box = 'Explain the CSS box model'
-  await seedQuestions(page.request, [
+  await seedQuestions(page.request, scenario, [
     { question: loop, answer: 'It runs queued callbacks one at a time.' },
     { question: delegation },
     { question: box },
   ])
-  await openContent(page)
+  await openContent(page, scenario.id)
   const list = listedQuestions(page)
   await expect(list).toHaveText([loop, delegation, box])
 

@@ -1,10 +1,9 @@
-import { readFile } from 'node:fs/promises'
 import { createClient } from '@libsql/client/http'
 import type { FullConfig } from '@playwright/test'
+import { migrate } from '../../scripts/db/migrate.mjs'
 import { loadTestUser } from './test-user'
 
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost']
-const BASELINE = new URL('../../db/migrations/0000_baseline.sql', import.meta.url)
 
 /** Prepares the empty e2e database and the test account. Runs after the web servers are up. */
 export default async function globalSetup(config: FullConfig) {
@@ -17,7 +16,7 @@ export default async function globalSetup(config: FullConfig) {
 
   const client = createClient({ url: dbUrl })
   try {
-    await client.executeMultiple(await readFile(BASELINE, 'utf8'))
+    await migrate(client)
   } finally {
     client.close()
   }

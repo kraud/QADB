@@ -131,7 +131,7 @@ function openQuestion(id: string) {
 
 function startPractice() {
   const queue = followOrder.value ? [...selection.value] : shuffle(selection.value)
-  practice.start('curated', queue)
+  practice.start('curated', queue, sid)
   navigateTo(practicePath(sid))
 }
 
@@ -284,6 +284,7 @@ onMounted(fetchQuestions)
   <QuestionEditorModal
     :open="editorOpen"
     :question-id="editingId"
+    :scenario="scenario"
     @close="editorOpen = false"
     @saved="onEditorSaved"
     @request-delete="onEditorRequestDelete"

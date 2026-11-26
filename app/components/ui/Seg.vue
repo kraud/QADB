@@ -13,6 +13,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
       :key="opt.value"
       type="button"
       :class="{ on: modelValue === opt.value }"
+      :aria-pressed="modelValue === opt.value"
       @click="emit('update:modelValue', opt.value)"
     >
       {{ opt.label }}

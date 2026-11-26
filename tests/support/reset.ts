@@ -1,8 +1,11 @@
 // API-level setup for the e2e specs. Pass `page.request`, so the session cookie is shared with the browser.
-import type { APIRequestContext, APIResponse } from '@playwright/test'
-import type { AttemptRow, QuestionWithStats } from '../../shared/types/qadb'
+import type { APIRequestContext } from '@playwright/test'
+import type { Scenario } from '../../shared/scenario/types'
+import type { AttemptRow, QuestionWithStats, ScenarioSummary } from '../../shared/types/qadb'
+import { json, optionValues } from './scenario-fixture'
 import { loadTestUser } from './test-user'
 
+/** A question of the front-end scenario. */
 export interface SeedQuestion {
   question: string
   answer?: string
@@ -15,24 +18,29 @@ export interface SeedQuestion {
   attempts?: boolean[]
 }
 
-async function json<T>(response: Promise<APIResponse>): Promise<T> {
-  const res = await response
-  if (!res.ok()) throw new Error(`API request failed: ${res.status()} ${res.url()}`)
-  return (res.status() === 204 ? undefined : await res.json()) as T
-}
+const DIFFICULTY_LABELS = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
+const IMPORTANCE_LABELS = { low: 'Low', mid: 'Mid', high: 'High' }
 
 /** Timestamps have millisecond precision and decide the order, so no two seeded rows may share one. */
 async function passMillisecond(timestamp: number) {
   while (Date.now() <= timestamp) await new Promise((resolve) => setTimeout(resolve, 1))
 }
 
-/** Logs in as the test user and deletes all of its questions (and with them their attempts). */
+/** Logs in as the test user and deletes all of its scenarios (and with them questions and attempts). */
 export async function resetUserData(request: APIRequestContext) {
   await json(request.post('/api/auth/login', { data: loadTestUser() }))
-  const questions = await json<{ id: string }[]>(request.get('/api/questions/ids'))
-  for (const { id } of questions) {
-    await json(request.delete(`/api/questions/${id}`))
+  const scenarios = await json<ScenarioSummary[]>(request.get('/api/scenarios'))
+  for (const scenario of scenarios) {
+    await deleteScenario(request, scenario)
   }
+}
+
+export async function deleteScenario(request: APIRequestContext, { id, name }: { id: string; name: string }) {
+  await json(request.delete(`/api/scenarios/${id}`, { data: { confirmName: name } }))
+}
+
+export async function deleteQuestion(request: APIRequestContext, id: string) {
+  await json(request.delete(`/api/questions/${id}`))
 }
 
 /** Records one result, newer than every earlier one. */
@@ -42,15 +50,17 @@ export async function recordAttempt(request: APIRequestContext, questionId: stri
 }
 
 /** Creates one question, with its attempts. Questions list in the order they were seeded. */
-export async function seedQuestion(request: APIRequestContext, seed: SeedQuestion) {
+export async function seedQuestion(request: APIRequestContext, scenario: Scenario, seed: SeedQuestion) {
   const created = await json<QuestionWithStats>(
-    request.post('/api/questions', {
+    request.post(`/api/scenarios/${scenario.id}/questions`, {
       data: {
         question: seed.question,
-        answer_summary: seed.answer ?? 'An answer.',
-        difficulty: seed.difficulty ?? 'medium',
-        importance: seed.importance ?? 'mid',
-        category: seed.categories ?? ['JS'],
+        answer: seed.answer ?? 'An answer.',
+        values: optionValues(scenario, {
+          Difficulty: [DIFFICULTY_LABELS[seed.difficulty ?? 'medium']],
+          Importance: [IMPORTANCE_LABELS[seed.importance ?? 'mid']],
+          Category: seed.categories ?? ['JS'],
+        }),
         link: seed.link,
       },
     }),
@@ -66,9 +76,9 @@ export async function seedQuestion(request: APIRequestContext, seed: SeedQuestio
   return created.id
 }
 
-export async function seedQuestions(request: APIRequestContext, seeds: SeedQuestion[]) {
+export async function seedQuestions(request: APIRequestContext, scenario: Scenario, seeds: SeedQuestion[]) {
   const ids: string[] = []
-  for (const seed of seeds) ids.push(await seedQuestion(request, seed))
+  for (const seed of seeds) ids.push(await seedQuestion(request, scenario, seed))
   return ids
 }
 

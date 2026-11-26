@@ -3,6 +3,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { visit } from './auth'
 
+/** Option labels are those of the front-end scenario fixture. */
 export interface QuestionInput {
   question: string
   answer: string
@@ -15,14 +16,15 @@ export interface QuestionInput {
 /** Runs `action` and waits for the list request it triggers. */
 async function reloadingList(page: Page, action: () => Promise<unknown>) {
   const response = page.waitForResponse(
-    (res) => new URL(res.url()).pathname === '/api/questions' && res.request().method() === 'GET',
+    (res) =>
+      /^\/api\/scenarios\/[^/]+\/questions$/.test(new URL(res.url()).pathname) && res.request().method() === 'GET',
   )
   await Promise.all([response, action()])
 }
 
-/** Opens the question list and waits for its first load. */
-export async function openContent(page: Page) {
-  await reloadingList(page, () => visit(page, '/content'))
+/** Opens the question list of a scenario and waits for its first load. */
+export async function openContent(page: Page, sid: string) {
+  await reloadingList(page, () => visit(page, `/scenarios/${sid}/content`))
 }
 
 // ─── list ────────────────────────────────────────────────────────────────
@@ -85,7 +87,7 @@ export function filtersPanel(page: Page): Locator {
   return page.getByRole('complementary')
 }
 
-/** Toggles a difficulty, importance or category chip. */
+/** Toggles an attribute option chip. */
 export async function toggleFilterChip(page: Page, name: string) {
   await reloadingList(page, () => filtersPanel(page).getByRole('button', { name, exact: true }).click())
 }
@@ -96,8 +98,7 @@ export async function chooseFilterOption(
   option: 'All' | 'Yes' | 'No',
 ) {
   const button = filtersPanel(page)
-    .locator('.filter-group')
-    .filter({ has: page.locator('.filter-title', { hasText: group }) })
+    .getByRole('group', { name: group, exact: true })
     .getByRole('button', { name: option, exact: true })
   await reloadingList(page, () => button.click())
 }
@@ -138,7 +139,7 @@ export function questionField(page: Page): Locator {
 }
 
 export function answerField(page: Page): Locator {
-  return editor(page).getByPlaceholder(/What you'd say out loud/)
+  return editor(page).getByLabel('Answer', { exact: true })
 }
 
 export function answerPreview(page: Page): Locator {
@@ -188,12 +189,22 @@ export async function discardChanges(page: Page) {
   await discardDialog(page).getByRole('button', { name: 'Discard' }).click()
 }
 
-async function chooseEditorOption(page: Page, field: 'Difficulty' | 'Importance', option: string) {
-  await editor(page)
-    .locator('.field')
-    .filter({ has: page.locator('label', { hasText: field }) })
-    .getByRole('button', { name: option, exact: true })
-    .click()
+/** The editor's control for one attribute. */
+export function editorAttribute(page: Page, name: string): Locator {
+  return editor(page).getByRole('group', { name, exact: true })
+}
+
+/** An option of an attribute in the editor; `aria-pressed` says whether it is chosen. */
+export function editorOption(page: Page, attribute: string, option: string): Locator {
+  return editorAttribute(page, attribute).getByRole('button', { name: option, exact: true })
+}
+
+export async function chooseEditorOption(page: Page, attribute: string, option: string) {
+  await editorOption(page, attribute, option).click()
+}
+
+export function linkField(page: Page): Locator {
+  return editor(page).getByLabel('Link', { exact: true })
 }
 
 /** Fills in and saves a new question from the list page. The caller asserts the outcome. */
@@ -205,20 +216,19 @@ export async function addQuestion(page: Page, input: QuestionInput) {
   if (input.importance) await chooseEditorOption(page, 'Importance', input.importance)
   if (input.categories) {
     // A new question starts with JS, and the last selected category cannot be removed.
-    const chip = (name: string) => editor(page).getByRole('button', { name, exact: true })
     for (const name of input.categories) {
-      if (name !== 'JS') await chip(name).click()
+      if (name !== 'JS') await chooseEditorOption(page, 'Category', name)
     }
-    if (!input.categories.includes('JS')) await chip('JS').click()
+    if (!input.categories.includes('JS')) await chooseEditorOption(page, 'Category', 'JS')
   }
-  if (input.link) await editor(page).getByLabel(/^Link to original/).fill(input.link)
+  if (input.link) await linkField(page).fill(input.link)
   await saveEditor(page)
 }
 
 // ─── detail ──────────────────────────────────────────────────────────────
 
-export async function openDetail(page: Page, id: string) {
-  await visit(page, `/questions/${id}`)
+export async function openDetail(page: Page, sid: string, id: string) {
+  await visit(page, `/scenarios/${sid}/questions/${id}`)
 }
 
 export function masteredSwitch(page: Page): Locator {

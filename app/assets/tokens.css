@@ -211,6 +211,12 @@ p { text-wrap: pretty; }
 .seg button:hover { color: var(--fg); background: var(--surface-2); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
+/* attribute field: long or many labels wrap instead of widening the dialog */
+.attr-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.attr-field-head .btn { padding-block: 0; }
+.attr-field .seg { max-width: 100%; flex-wrap: wrap; }
+.attr-field .seg button { min-width: 0; overflow-wrap: anywhere; box-shadow: 0 -1px 0 var(--border); }
+
 /* switch */
 .switch { position: relative; display: inline-flex; align-items: center; gap: 9px; cursor: pointer; font-size: 13px; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
@@ -454,7 +460,6 @@ p { text-wrap: pretty; }
 .meta-label { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--muted); }
 .meta-label:hover { color: var(--fg); }
 .meta-ic { width: 13px; height: 13px; color: var(--muted); }
-.meta-cats { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .practice-track .tr-table { margin-top: 10px; }
 .practice-track .track-mini { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .end-panel { text-align: center; padding: 40px 20px; }

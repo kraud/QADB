@@ -1,16 +1,21 @@
 import { expect, test } from '@playwright/test'
+import type { Scenario } from '../../shared/scenario/types'
 import {
   addQuestion,
   answerField,
   answerPreview,
   cancelEditor,
+  chooseEditorOption,
   closeEditor,
   confirmDelete,
   discardChanges,
   discardDialog,
   editor,
+  editorAttribute,
+  editorOption,
   formatAnswer,
   keepEditing,
+  linkField,
   listedQuestions,
   openContent,
   openDeleteDialog,
@@ -22,15 +27,19 @@ import {
   showAnswerPreview,
 } from '../flows/questions'
 import { fetchQuestion, resetUserData, seedQuestion } from '../support/reset'
+import { addAttribute, createFrontendScenario, optionValues } from '../support/scenario-fixture'
 
 const QUESTION = 'What is hoisting?'
 
+let scenario: Scenario
+
 test.beforeEach(async ({ page }) => {
   await resetUserData(page.request)
+  scenario = await createFrontendScenario(page.request)
 })
 
 test('add shows "Question added"', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
 
   await addQuestion(page, {
     question: QUESTION,
@@ -53,17 +62,17 @@ test('add shows "Question added"', async ({ page }) => {
 })
 
 test('required fields show errors', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
   await openNewEditor(page)
 
   await saveEditor(page)
 
   await expect(editor(page).getByText('The question is required.')).toBeVisible()
-  await expect(editor(page).getByText('An answer summary is required.')).toBeVisible()
+  await expect(editor(page).getByText('An answer is required.')).toBeVisible()
 })
 
 test('edit shows "Question updated"', async ({ page }) => {
-  const id = await seedQuestion(page.request, {
+  const id = await seedQuestion(page.request, scenario, {
     question: QUESTION,
     answer: 'The original answer.',
     difficulty: 'hard',
@@ -72,7 +81,7 @@ test('edit shows "Question updated"', async ({ page }) => {
     link: 'https://example.com/hoisting',
     mastered: true,
   })
-  await openContent(page)
+  await openContent(page, scenario.id)
   await openEditor(page, QUESTION)
   await expect(questionField(page)).toHaveValue(QUESTION)
 
@@ -85,18 +94,16 @@ test('edit shows "Question updated"', async ({ page }) => {
   // Everything left untouched is stored as it was.
   expect(await fetchQuestion(page.request, id)).toMatchObject({
     question: 'What is temporal dead zone?',
-    answer_summary: 'The original answer.',
-    difficulty: 'hard',
-    importance: 'high',
-    category: ['CSS', 'API'],
+    answer: 'The original answer.',
+    values: optionValues(scenario, { Difficulty: ['Hard'], Importance: ['High'], Category: ['CSS', 'API'] }),
     link: 'https://example.com/hoisting',
     mastered: 1,
   })
 })
 
 test('delete warns with the attempt count, then "Question deleted"', async ({ page }) => {
-  await seedQuestion(page.request, { question: QUESTION, attempts: [true, false] })
-  await openContent(page)
+  await seedQuestion(page.request, scenario, { question: QUESTION, attempts: [true, false] })
+  await openContent(page, scenario.id)
 
   await openDeleteDialog(page, QUESTION)
   await expect(page.getByRole('alertdialog', { name: 'Delete question' })).toContainText(
@@ -109,7 +116,7 @@ test('delete warns with the attempt count, then "Question deleted"', async ({ pa
 })
 
 test('closing with typed changes asks "Discard changes?"', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
   await openNewEditor(page)
   await questionField(page).fill(QUESTION)
 
@@ -126,7 +133,7 @@ test('closing with typed changes asks "Discard changes?"', async ({ page }) => {
 })
 
 test('Display tab renders Markdown', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
   await openNewEditor(page)
   await answerField(page).fill('## Scope\n\nUse **let** inside `for` loops.')
 
@@ -140,7 +147,7 @@ test('Display tab renders Markdown', async ({ page }) => {
 })
 
 test('Format replaces the answer with the stub result', async ({ page }) => {
-  await openContent(page)
+  await openContent(page, scenario.id)
   await openNewEditor(page)
   await answerField(page).fill('plain answer')
 
@@ -148,4 +155,163 @@ test('Format replaces the answer with the stub result', async ({ page }) => {
 
   await expect(answerField(page)).toHaveValue('**stub** plain answer')
   await expect(page.getByText('Formatted with AI')).toBeVisible()
+})
+
+test('closing after changing only an attribute asks "Discard changes?"', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  await openContent(page, scenario.id)
+
+  await test.step('untouched, it closes at once', async () => {
+    await openEditor(page, QUESTION)
+    await closeEditor(page)
+    await expect(editor(page)).toBeHidden()
+    await expect(discardDialog(page)).toBeHidden()
+  })
+
+  await test.step('a change asks, and taking it back does not', async () => {
+    await openEditor(page, QUESTION)
+    await chooseEditorOption(page, 'Difficulty', 'Hard')
+    await closeEditor(page)
+    await expect(discardDialog(page)).toContainText('Your edits to this question will be lost.')
+    await keepEditing(page)
+    await expect(editorOption(page, 'Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true')
+
+    await chooseEditorOption(page, 'Difficulty', 'Medium')
+    await closeEditor(page)
+    await expect(editor(page)).toBeHidden()
+    await expect(discardDialog(page)).toBeHidden()
+  })
+
+  await test.step('discarding leaves the question as it was', async () => {
+    await openEditor(page, QUESTION)
+    await chooseEditorOption(page, 'Category', 'CSS')
+    await cancelEditor(page)
+    await discardChanges(page)
+    await expect(editor(page)).toBeHidden()
+    expect((await fetchQuestion(page.request, id)).values).toEqual(
+      optionValues(scenario, { Difficulty: ['Medium'], Importance: ['Mid'], Category: ['JS'] }),
+    )
+  })
+
+  await test.step('also for a new question', async () => {
+    await openNewEditor(page)
+    await closeEditor(page)
+    await expect(editor(page)).toBeHidden()
+
+    await openNewEditor(page)
+    await chooseEditorOption(page, 'Importance', 'High')
+    await closeEditor(page)
+    await expect(discardDialog(page)).toBeVisible()
+  })
+})
+
+test('a new question starts with the default options', async ({ page }) => {
+  await openContent(page, scenario.id)
+
+  await openNewEditor(page)
+
+  await expect(editorAttribute(page, 'Difficulty').getByRole('button', { pressed: true })).toHaveText(['Medium'])
+  await expect(editorAttribute(page, 'Importance').getByRole('button', { pressed: true })).toHaveText(['Mid'])
+  await expect(editorAttribute(page, 'Category').getByRole('button', { pressed: true })).toHaveText(['JS'])
+  // The last choice of a required multiple attribute stays.
+  await expect(editorOption(page, 'Category', 'JS')).toBeDisabled()
+  await expect(editor(page).getByRole('button', { name: /^Clear / })).toHaveCount(0)
+})
+
+test('editing an incomplete question marks what is missing and preselects nothing', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION })
+  const changed = await addAttribute(page.request, scenario, {
+    name: 'Level',
+    labels: ['Junior', 'Senior'], // Junior is the default
+    required: true,
+  })
+  await openContent(page, scenario.id)
+
+  await openEditor(page, QUESTION)
+
+  const level = editorAttribute(page, 'Level')
+  await expect(level.getByText('Level is required')).toBeVisible()
+  await expect(level.getByRole('button', { pressed: true })).toHaveCount(0)
+  await expect(editor(page).locator('.field-err:visible')).toHaveCount(1)
+  await closeEditor(page)
+  await expect(editor(page)).toBeHidden() // opening it changed nothing
+
+  await openEditor(page, QUESTION)
+  await saveEditor(page)
+  await expect(level.getByText('Level is required')).toBeVisible()
+  await expect(editor(page)).toBeVisible()
+  expect((await fetchQuestion(page.request, id)).incomplete).toBe(true)
+
+  await chooseEditorOption(page, 'Level', 'Senior')
+  await expect(level.getByText('Level is required')).toBeHidden()
+  await saveEditor(page)
+
+  await expect(page.getByText('Question updated')).toBeVisible()
+  expect(await fetchQuestion(page.request, id)).toMatchObject({
+    incomplete: false,
+    values: optionValues(changed, {
+      Difficulty: ['Medium'],
+      Importance: ['Mid'],
+      Category: ['JS'],
+      Level: ['Senior'],
+    }),
+  })
+})
+
+test('single choice holds one option, and optional attributes can be cleared', async ({ page }) => {
+  // Up to four options make a segmented control, more make chips.
+  const withRegion = await addAttribute(page.request, scenario, {
+    name: 'Region',
+    labels: ['North', 'South', 'East', 'West'],
+    required: false,
+  })
+  const changed = await addAttribute(page.request, withRegion, {
+    name: 'Team',
+    labels: ['Red', 'Blue', 'Green', 'Pink', 'Gray'],
+    required: false,
+  })
+  await openContent(page, scenario.id)
+  await openNewEditor(page)
+  await expect(editorAttribute(page, 'Region').locator('.seg')).toBeVisible()
+  await expect(editorAttribute(page, 'Team').locator('.chip-group')).toBeVisible()
+  await expect(editorAttribute(page, 'Team').locator('.seg')).toHaveCount(0)
+  await questionField(page).fill(QUESTION)
+  await answerField(page).fill('An answer.')
+
+  for (const [attribute, first, second] of [
+    ['Region', 'South', 'East'],
+    ['Team', 'Blue', 'Pink'],
+  ] as const) {
+    await chooseEditorOption(page, attribute, first)
+    await chooseEditorOption(page, attribute, second)
+    await expect(editorAttribute(page, attribute).getByRole('button', { pressed: true })).toHaveText([second])
+  }
+  await saveEditor(page)
+  await expect(page.getByText('Question added')).toBeVisible()
+  await openEditor(page, QUESTION)
+  await expect(editorAttribute(page, 'Team').getByRole('button', { pressed: true })).toHaveText(['Pink'])
+
+  await editor(page).getByRole('button', { name: 'Clear Region' }).click()
+  await chooseEditorOption(page, 'Team', 'Pink') // a chosen chip lets go
+  await expect(editorAttribute(page, 'Region').getByRole('button', { pressed: true })).toHaveCount(0)
+  await expect(editorAttribute(page, 'Team').getByRole('button', { pressed: true })).toHaveCount(0)
+  const saved = page.waitForRequest((req) => req.method() === 'PATCH')
+  await saveEditor(page)
+
+  const empty = optionValues(changed, { Difficulty: ['Medium'], Importance: ['Mid'], Category: ['JS'] })
+  expect((await saved).postDataJSON().values).toEqual(empty)
+  await expect(page.getByText('Question updated')).toBeVisible()
+  await expect(questionRow(page, QUESTION).getByTitle('Region')).toHaveText('—')
+})
+
+test('an emptied link is removed', async ({ page }) => {
+  const id = await seedQuestion(page.request, scenario, { question: QUESTION, link: 'https://example.com/hoisting' })
+  await openContent(page, scenario.id)
+  await openEditor(page, QUESTION)
+
+  await linkField(page).fill('')
+  await saveEditor(page)
+
+  await expect(page.getByText('Question updated')).toBeVisible()
+  expect((await fetchQuestion(page.request, id)).link).toBeNull()
 })

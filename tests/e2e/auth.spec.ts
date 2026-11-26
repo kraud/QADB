@@ -1,16 +1,27 @@
 import { expect, test } from '@playwright/test'
 import { register, signIn, signOut, visit } from '../flows/auth'
+import { resetUserData } from '../support/reset'
+import { createFrontendScenario } from '../support/scenario-fixture'
 import { loadTestUser } from '../support/test-user'
 
 const user = loadTestUser()
+/** Where the test user lands: the content of its only scenario. */
+let content: string
 
-test('register creates an account and lands on /content', async ({ page }) => {
+// Through the `request` fixture, which keeps its session cookie away from the browser.
+test.beforeEach(async ({ request }) => {
+  await resetUserData(request)
+  content = `/scenarios/${(await createFrontendScenario(request)).id}/content`
+})
+
+test('register creates an account and lands on the scenario list', async ({ page }) => {
   const username = `new_${Date.now()}`
 
   await register(page, { username, password: 'a-long-enough-password' })
 
-  await expect(page).toHaveURL('/content')
-  await expect(page.getByRole('heading', { name: 'Content' })).toBeVisible()
+  await expect(page).toHaveURL('/scenarios')
+  await expect(page.getByRole('heading', { name: 'Scenarios', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Create your first scenario' })).toBeVisible()
   await expect(page.getByText(username, { exact: true })).toBeVisible()
 })
 
@@ -41,19 +52,20 @@ test('login with wrong password', async ({ page }) => {
   await expect(page).toHaveURL('/login')
 })
 
-test('login, then log out, then /content redirects', async ({ page }) => {
+test('login, then log out, then the content page redirects', async ({ page }) => {
   await signIn(page, user)
-  await expect(page).toHaveURL('/content')
+  await expect(page).toHaveURL(content)
+  await expect(page.getByRole('heading', { name: 'Content' })).toBeVisible()
 
   await signOut(page)
   await expect(page).toHaveURL('/login')
 
-  await page.goto('/content')
+  await page.goto(content)
   await expect(page).toHaveURL('/login?expired=1')
 })
 
 test('an expired session shows the notice', async ({ page, context }) => {
-  const loaded = page.waitForResponse((res) => res.url().includes('/api/questions') && res.ok())
+  const loaded = page.waitForResponse((res) => /\/api\/scenarios\/[^/]+\/questions/.test(res.url()) && res.ok())
   await signIn(page, user)
   await loaded
 
@@ -67,7 +79,7 @@ test('an expired session shows the notice', async ({ page, context }) => {
 test('theme toggle persists across reload', async ({ page }) => {
   const html = page.locator('html')
   await signIn(page, user)
-  await expect(page).toHaveURL('/content')
+  await expect(page).toHaveURL(content)
   await expect(html).toHaveAttribute('data-theme', 'light')
 
   await page.getByRole('button', { name: 'Toggle theme' }).click()
