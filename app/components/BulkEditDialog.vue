@@ -101,10 +101,10 @@ function chooseAction(next: BulkAction) {
   serverError.value = ''
 }
 
-function toggle(id: string) {
-  if (action.value === 'set') chosenIds.value = [id]
-  else if (chosenIds.value.includes(id)) chosenIds.value = chosenIds.value.filter((x) => x !== id)
-  else chosenIds.value = [...chosenIds.value, id]
+function choose(next: string[]) {
+  // "Set" always has its option once one is picked.
+  if (action.value === 'set' && !next.length) return
+  chosenIds.value = next
   serverError.value = ''
 }
 
@@ -218,18 +218,17 @@ function close() {
 
         <div v-if="attribute && action && action !== 'clear'" class="field" role="group" :aria-labelledby="`${uid}-options`">
           <span :id="`${uid}-options`" class="field-label">{{ action === 'set' ? 'Option' : 'Options' }}</span>
-          <div class="chip-group">
+          <ChipGroup :type="action === 'set' ? 'single' : 'multiple'" :model-value="optionIds" @update:model-value="choose">
             <Chip
               v-for="option in attribute.options"
               :key="option.id"
-              :active="optionIds.includes(option.id)"
+              :value="option.id"
               :color="colorVar(option.color)"
               :disabled="saving"
-              @click="toggle(option.id)"
             >
               {{ option.label }}
             </Chip>
-          </div>
+          </ChipGroup>
         </div>
 
         <p class="bulk-outcome" :class="{ refused: outcome.refused }" role="status">{{ outcome.text }}</p>

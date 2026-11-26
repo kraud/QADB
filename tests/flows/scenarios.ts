@@ -98,15 +98,14 @@ export function optionLabelField(row: Locator): Locator {
 }
 
 export async function chooseSelectionMode(card: Locator, mode: 'Single' | 'Multiple') {
-  await card.getByRole('group', { name: 'Selection mode' }).getByRole('button', { name: mode }).click()
+  await card.getByRole('group', { name: 'Selection mode' }).getByRole('radio', { name: mode }).click()
 }
 
-// The switches draw over their native checkbox, so these clicks are forced. A forced click is not
-// checked for what covers it, and the editor's save bar sticks to the bottom: scroll clear of it.
 export async function setSwitch(scope: Locator, name: 'Ordered' | 'Required' | 'Default', on: boolean) {
-  const checkbox = scope.getByRole('checkbox', { name, exact: true })
-  await checkbox.evaluate((element) => element.scrollIntoView({ block: 'center' }))
-  await checkbox.setChecked(on, { force: true })
+  const control = scope.getByRole('switch', { name, exact: true })
+  // The editor's save bar sticks to the bottom: scroll clear of it.
+  await control.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  await control.setChecked(on)
 }
 
 export async function chooseColor(row: Locator, color: string) {

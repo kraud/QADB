@@ -21,16 +21,13 @@ function choose(id: string) {
   emit('update:modelValue', [id])
 }
 
-/** A chip: single selection replaces the choice, multiple selection adds to it or takes away. */
-function toggle(id: string) {
-  const chosen = props.modelValue.includes(id)
-  if (single.value) {
-    if (!chosen) choose(id)
-    else if (!props.attribute.required) emit('update:modelValue', [])
-  } else if (!locked(id)) {
-    const next = chosen ? props.modelValue.filter((o) => o !== id) : [...props.modelValue, id]
-    emit('update:modelValue', orderedOptionIds(props.attribute, next))
-  }
+/**
+ * The chips chosen after a click: a required attribute cannot be emptied, and the options of a
+ * multiple one are kept in option order.
+ */
+function change(next: string[]) {
+  if (!next.length && props.attribute.required) return
+  emit('update:modelValue', single.value ? next : orderedOptionIds(props.attribute, next))
 }
 </script>
 
@@ -51,18 +48,22 @@ function toggle(id: string) {
     </div>
 
     <Seg v-if="segmented" :model-value="modelValue[0]" :options="segOptions" @update:model-value="choose" />
-    <div v-else class="chip-group">
+    <ChipGroup
+      v-else
+      :type="attribute.selectionMode"
+      :model-value="modelValue"
+      @update:model-value="change"
+    >
       <Chip
         v-for="option in attribute.options"
         :key="option.id"
-        :active="modelValue.includes(option.id)"
+        :value="option.id"
         :color="colorVar(option.color)"
         :disabled="locked(option.id)"
-        @click="toggle(option.id)"
       >
         {{ option.label }}
       </Chip>
-    </div>
+    </ChipGroup>
 
     <div v-if="error" class="field-err">{{ error }}</div>
   </div>

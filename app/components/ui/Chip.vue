@@ -1,19 +1,18 @@
 <script setup lang="ts">
-defineProps<{ active?: boolean; color?: string; disabled?: boolean }>()
-defineEmits<{ (e: 'click'): void }>()
+import { ToggleGroupItem } from 'reka-ui'
+
+/** One choice of a `ChipGroup`, which holds what is chosen. */
+defineProps<{ value: string; color?: string; disabled?: boolean }>()
 </script>
 
 <template>
-  <button
-    type="button"
+  <ToggleGroupItem
     class="chip"
-    :class="{ on: active, off: disabled }"
+    :class="{ off: disabled }"
+    :value="value"
     :disabled="disabled"
-    :aria-disabled="disabled"
-    :aria-pressed="active"
     :style="color ? { '--cv': color } : undefined"
-    @click="$emit('click')"
   >
     <slot />
-  </button>
+  </ToggleGroupItem>
 </template>

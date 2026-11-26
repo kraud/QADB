@@ -359,7 +359,7 @@ test('an incomplete question can be graded and marked as mastered', async ({ pag
 
   await answerCurrent(page, false)
   await expect(page.getByText('Incorrect — recorded')).toBeVisible()
-  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await page.getByRole('switch', { name: 'Mark as mastered' }).setChecked(true)
 
   await expect(page.getByText('Marked as mastered', { exact: true }).first()).toBeVisible()
   const stored = await fetchQuestion(page.request, id)
@@ -391,12 +391,12 @@ test('Next and the mastered switch wait while an answer is being recorded', asyn
   await page.getByRole('button', { name: 'Correct', exact: true }).click()
 
   await expect(page.getByRole('button', { name: 'Next question' })).toBeDisabled()
-  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).toBeDisabled()
+  await expect(page.getByRole('switch', { name: 'Mark as mastered' })).toBeDisabled()
   await attempt.release()
   await expect(page.getByText('Track record — 1 practiced')).toBeVisible()
   await expect(currentQuestion(page)).toHaveText(FIRST)
   await expect(page.getByRole('button', { name: 'Next question' })).toBeEnabled()
-  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).toBeEnabled()
+  await expect(page.getByRole('switch', { name: 'Mark as mastered' })).toBeEnabled()
 })
 
 test('a mastered response arriving after moving on leaves the current card alone', async ({ page }) => {
@@ -405,7 +405,7 @@ test('a mastered response arriving after moving on leaves the current card alone
   await startSelectedPractice(page, [FIRST, SECOND], true)
   await expect(currentQuestion(page)).toHaveText(FIRST)
   const update = await hold(page, 'PATCH', `/api/questions/${first}`)
-  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await page.getByRole('switch', { name: 'Mark as mastered' }).setChecked(true)
   await nextQuestion(page)
   await expect(currentQuestion(page)).toHaveText(SECOND)
 
@@ -413,7 +413,7 @@ test('a mastered response arriving after moving on leaves the current card alone
 
   await expect(page.locator('.toast', { hasText: 'Marked as mastered' })).toBeVisible()
   await expect(currentQuestion(page)).toHaveText(SECOND)
-  await expect(page.getByRole('checkbox', { name: 'Mark as mastered' })).not.toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Mark as mastered' })).not.toBeChecked()
 })
 
 test('a failed mastered request arriving after moving on does not reload the current card', async ({ page }) => {
@@ -422,7 +422,7 @@ test('a failed mastered request arriving after moving on does not reload the cur
   await startSelectedPractice(page, [FIRST, SECOND], true)
   await expect(currentQuestion(page)).toHaveText(FIRST)
   const update = await hold(page, 'PATCH', `/api/questions/${first}`)
-  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await page.getByRole('switch', { name: 'Mark as mastered' }).setChecked(true)
   await nextQuestion(page)
   await expect(currentQuestion(page)).toHaveText(SECOND)
   await showAnswer(page)
@@ -449,7 +449,7 @@ test('overlapping loads of a deleted question drop only that question', async ({
   const attempt = await hold(page, 'POST', '/api/attempts')
   const read = await hold(page, 'GET', `/api/questions/${first}`)
   await showAnswer(page)
-  await page.getByRole('checkbox', { name: 'Mark as mastered' }).setChecked(true, { force: true })
+  await page.getByRole('switch', { name: 'Mark as mastered' }).setChecked(true)
   await page.getByRole('button', { name: 'Correct', exact: true }).click()
 
   // Both requests find the question gone, and each makes the session read it again.

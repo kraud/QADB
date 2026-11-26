@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { colorVar } from '#shared/scenario/colors'
 import { countActiveFilters, type Filters } from '#shared/scenario/query'
-import type { Scenario } from '#shared/scenario/types'
+import type { Attribute, Scenario } from '#shared/scenario/types'
 
 const props = defineProps<{ scenario: Scenario; filters: Filters; open?: boolean }>()
 const emit = defineEmits<{ (e: 'change'): void; (e: 'reset'): void }>()
@@ -19,11 +19,21 @@ const masteredOptions = [
 
 const activeCount = computed(() => countActiveFilters(props.filters, props.scenario))
 
-/** Adds or removes an option id (`options`) or an attribute id (`none`). */
-function toggle(list: string[], id: string) {
-  const i = list.indexOf(id)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(id)
+/** Stands for the "None" chip among an attribute's options: ids have no colon. */
+const NONE = ':none'
+
+const chosen = (attribute: Attribute) => [
+  ...attribute.options.map((o) => o.id).filter((id) => props.filters.options.includes(id)),
+  ...(props.filters.none.includes(attribute.id) ? [NONE] : []),
+]
+
+function setChosen(attribute: Attribute, next: string[]) {
+  const own = new Set(attribute.options.map((o) => o.id))
+  props.filters.options = [...props.filters.options.filter((id) => !own.has(id)), ...next.filter((id) => id !== NONE)]
+  props.filters.none = [
+    ...props.filters.none.filter((id) => id !== attribute.id),
+    ...(next.includes(NONE) ? [attribute.id] : []),
+  ]
   emit('change')
 }
 
@@ -49,18 +59,12 @@ function onOpChange(op: string) {
   <aside class="filters" :class="{ open }">
     <div v-for="attribute in scenario.attributes" :key="attribute.id" class="filter-group" role="group" :aria-label="attribute.name">
       <p class="filter-title">{{ attribute.name }}</p>
-      <div class="chip-group">
-        <Chip
-          v-for="option in attribute.options"
-          :key="option.id"
-          :active="filters.options.includes(option.id)"
-          :color="colorVar(option.color)"
-          @click="toggle(filters.options, option.id)"
-        >
+      <ChipGroup type="multiple" :model-value="chosen(attribute)" @update:model-value="setChosen(attribute, $event)">
+        <Chip v-for="option in attribute.options" :key="option.id" :value="option.id" :color="colorVar(option.color)">
           {{ option.label }}
         </Chip>
-        <Chip :active="filters.none.includes(attribute.id)" @click="toggle(filters.none, attribute.id)">None</Chip>
-      </div>
+        <Chip :value="NONE">None</Chip>
+      </ChipGroup>
     </div>
 
     <div class="filter-group" role="group" aria-label="Never been done">

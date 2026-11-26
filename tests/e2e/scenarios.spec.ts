@@ -267,18 +267,18 @@ test('switching selection mode keeps the attribute valid', async ({ page }) => {
     options: [{ label: 'Basic' }, { label: 'Advanced', isDefault: true }],
   })
   const card = attributeCard(page, 'Level')
-  const ordered = card.getByRole('checkbox', { name: 'Ordered' })
+  const ordered = card.getByRole('switch', { name: 'Ordered' })
 
   await chooseSelectionMode(card, 'Multiple')
   await expect(ordered).not.toBeChecked()
   await expect(ordered).toBeDisabled()
   await setSwitch(optionRow(card, 'Basic'), 'Default', true)
-  await expect(optionRow(card, 'Advanced').getByRole('checkbox', { name: 'Default' })).toBeChecked()
+  await expect(optionRow(card, 'Advanced').getByRole('switch', { name: 'Default' })).toBeChecked()
 
   await chooseSelectionMode(card, 'Single')
   await expect(ordered).toBeEnabled()
-  await expect(optionRow(card, 'Basic').getByRole('checkbox', { name: 'Default' })).toBeChecked()
-  await expect(optionRow(card, 'Advanced').getByRole('checkbox', { name: 'Default' })).not.toBeChecked()
+  await expect(optionRow(card, 'Basic').getByRole('switch', { name: 'Default' })).toBeChecked()
+  await expect(optionRow(card, 'Advanced').getByRole('switch', { name: 'Default' })).not.toBeChecked()
 
   await setSwitch(card, 'Ordered', true)
   await chooseSelectionMode(card, 'Multiple')
@@ -455,10 +455,10 @@ test('single to multiple is applied directly and switches Ordered off', async ({
   const question = await seedQuestion(page.request, scenario, { question: FIRST, difficulty: 'hard' })
   await editFrontend(page)
   const card = attributeCard(page, 'Difficulty')
-  await expect(card.getByRole('checkbox', { name: 'Ordered' })).toBeChecked()
+  await expect(card.getByRole('switch', { name: 'Ordered' })).toBeChecked()
 
   await chooseSelectionMode(card, 'Multiple')
-  await expect(card.getByRole('checkbox', { name: 'Ordered' })).not.toBeChecked()
+  await expect(card.getByRole('switch', { name: 'Ordered' })).not.toBeChecked()
   await saveScenario(page)
 
   // No confirmation on the way.

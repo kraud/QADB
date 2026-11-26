@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CheckboxIndicator, CheckboxRoot } from 'reka-ui'
+
 defineProps<{
   modelValue?: boolean
   indeterminate?: boolean
@@ -8,16 +10,14 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 </script>
 
 <template>
-  <label class="checkbox">
-    <input
-      type="checkbox"
-      :checked="modelValue"
-      :indeterminate.prop="indeterminate"
-      :aria-label="ariaLabel"
-      @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
-    />
-    <span class="box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6" /></svg>
-    </span>
-  </label>
+  <CheckboxRoot
+    class="checkbox"
+    :model-value="indeterminate ? 'indeterminate' : !!modelValue"
+    :aria-label="ariaLabel"
+    @update:model-value="emit('update:modelValue', $event === true)"
+  >
+    <CheckboxIndicator class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M4 12l6 6L20 6" /></svg>
+    </CheckboxIndicator>
+  </CheckboxRoot>
 </template>

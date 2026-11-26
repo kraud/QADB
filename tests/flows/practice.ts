@@ -5,7 +5,7 @@ import { selectQuestion } from './questions'
 /** Selects rows on the question list (already open) and starts practicing them. */
 export async function startSelectedPractice(page: Page, texts: string[], followOrder: boolean) {
   for (const text of texts) await selectQuestion(page, text)
-  await page.getByRole('checkbox', { name: 'Follow current sort/order' }).setChecked(followOrder, { force: true })
+  await page.getByRole('switch', { name: 'Follow current sort/order' }).setChecked(followOrder)
   await page.getByRole('button', { name: 'Start practice' }).click()
 }
 

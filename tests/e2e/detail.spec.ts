@@ -5,6 +5,7 @@ import { currentQuestion, practiceProgress } from '../flows/practice'
 import {
   confirmDelete,
   editor,
+  editorOption,
   masteredSwitch,
   openDetail,
   setMastered,
@@ -79,10 +80,7 @@ test('shows every attribute value, the answer and the link', async ({ page }) =>
   await expect(page.locator('.callout strong')).toHaveText('listener')
   await expect(page.getByRole('link', { name: 'Open link' })).toHaveAttribute('href', 'https://example.com/delegation')
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
-  await expect(editor(page).getByRole('group', { name: 'Difficulty' }).getByRole('button', { name: 'Hard' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(editorOption(page, 'Difficulty', 'Hard')).toBeChecked()
 })
 
 test('a question of another scenario shows the 404 panel', async ({ page }) => {

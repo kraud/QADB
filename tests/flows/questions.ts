@@ -50,14 +50,12 @@ export function questionRow(page: Page, text: string): Locator {
   return page.getByRole('row', { includeHidden: true }).filter({ hasText: text })
 }
 
-// The app draws its own box over each native checkbox, so these clicks are forced; they land on the
-// drawing, inside the same label, exactly like a user's click.
 export async function selectQuestion(page: Page, text: string) {
-  await questionRow(page, text).getByRole('checkbox').check({ force: true })
+  await questionRow(page, text).getByRole('checkbox').check()
 }
 
 export async function selectAllShown(page: Page) {
-  await page.getByRole('checkbox', { name: 'Select all shown' }).check({ force: true })
+  await page.getByRole('checkbox', { name: 'Select all shown' }).check()
 }
 
 export async function sortBy(
@@ -109,7 +107,7 @@ export async function chooseFilterOption(
 ) {
   const button = filtersPanel(page)
     .getByRole('group', { name: group, exact: true })
-    .getByRole('button', { name: option, exact: true })
+    .getByRole('radio', { name: option, exact: true })
   await reloadingList(page, () => button.click())
 }
 
@@ -123,7 +121,7 @@ export async function setPracticeCount(page: Page, count: number) {
 
 export async function toggleRecentlyFailed(page: Page) {
   await reloadingList(page, () =>
-    page.getByRole('checkbox', { name: 'Only questions whose last attempt was incorrect' }).click(),
+    page.getByRole('switch', { name: 'Only questions whose last attempt was incorrect' }).click(),
   )
 }
 
@@ -149,19 +147,18 @@ export async function showIncomplete(page: Page) {
 }
 
 export function incompleteSwitch(page: Page): Locator {
-  return filtersPanel(page).getByRole('checkbox', { name: 'Incomplete', exact: true })
+  return filtersPanel(page).getByRole('switch', { name: 'Incomplete', exact: true })
 }
 
 export async function toggleIncompleteFilter(page: Page) {
-  // Drawn over, like the checkboxes.
-  await reloadingList(page, () => incompleteSwitch(page).click({ force: true }))
+  await reloadingList(page, () => incompleteSwitch(page).click())
 }
 
 // ─── bulk editing ────────────────────────────────────────────────────────
 
 /** Selects a question's card in the list shown on narrow screens. */
 export async function selectCard(page: Page, text: string) {
-  await page.locator('.mcard').filter({ hasText: text }).getByRole('checkbox').check({ force: true })
+  await page.locator('.mcard').filter({ hasText: text }).getByRole('checkbox').check()
 }
 
 export function bulkDialog(page: Page): Locator {
@@ -242,7 +239,7 @@ export async function openEditor(page: Page, text: string) {
 }
 
 export async function showAnswerPreview(page: Page) {
-  await editor(page).getByRole('button', { name: 'Display' }).click()
+  await editor(page).getByRole('radio', { name: 'Display' }).click()
 }
 
 export async function formatAnswer(page: Page) {
@@ -278,9 +275,17 @@ export function editorAttribute(page: Page, name: string): Locator {
   return editor(page).getByRole('group', { name, exact: true })
 }
 
-/** An option of an attribute in the editor; `aria-pressed` says whether it is chosen. */
+/** An option of an attribute in the editor: a radio in a segmented control, otherwise a chip. */
 export function editorOption(page: Page, attribute: string, option: string): Locator {
-  return editorAttribute(page, attribute).getByRole('button', { name: option, exact: true })
+  const field = editorAttribute(page, attribute)
+  const exactly = { name: option, exact: true }
+  return field.getByRole('radio', exactly).or(field.getByRole('button', exactly))
+}
+
+/** The chosen options of an attribute in the editor. */
+export function chosenEditorOptions(page: Page, attribute: string): Locator {
+  const field = editorAttribute(page, attribute)
+  return field.getByRole('radio', { checked: true }).or(field.getByRole('button', { pressed: true }))
 }
 
 export async function chooseEditorOption(page: Page, attribute: string, option: string) {
@@ -316,11 +321,11 @@ export async function openDetail(page: Page, sid: string, id: string) {
 }
 
 export function masteredSwitch(page: Page): Locator {
-  return page.getByRole('checkbox', { name: 'Mark as mastered' })
+  return page.getByRole('switch', { name: 'Mark as mastered' })
 }
 
 export async function setMastered(page: Page, mastered: boolean) {
-  await masteredSwitch(page).setChecked(mastered, { force: true }) // drawn over, like the checkboxes
+  await masteredSwitch(page).setChecked(mastered)
 }
 
 /** The result column of the track record table, top row first. */

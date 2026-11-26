@@ -206,7 +206,7 @@ onMounted(() => load(setup))
   <template v-else-if="question && scenario">
     <div class="practice-progress">
       <span class="count">Question {{ store.index + 1 }} of {{ total }}</span>
-      <div class="progress-bar"><div class="fill" :style="{ width: Math.round((store.index / total) * 100) + '%' }" /></div>
+      <Progress :value="store.index" :max="total" aria-label="Practice progress" />
     </div>
 
     <PracticeCard

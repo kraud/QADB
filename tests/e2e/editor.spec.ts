@@ -6,6 +6,7 @@ import {
   answerPreview,
   cancelEditor,
   chooseEditorOption,
+  chosenEditorOptions,
   closeEditor,
   confirmDelete,
   discardChanges,
@@ -175,7 +176,7 @@ test('closing after changing only an attribute asks "Discard changes?"', async (
     await closeEditor(page)
     await expect(discardDialog(page)).toContainText('Your edits to this question will be lost.')
     await keepEditing(page)
-    await expect(editorOption(page, 'Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true')
+    await expect(editorOption(page, 'Difficulty', 'Hard')).toHaveAttribute('data-state', /^(on|checked)$/)
 
     await chooseEditorOption(page, 'Difficulty', 'Medium')
     await closeEditor(page)
@@ -211,9 +212,9 @@ test('a new question starts with the default options', async ({ page }) => {
 
   await openNewEditor(page)
 
-  await expect(editorAttribute(page, 'Difficulty').getByRole('button', { pressed: true })).toHaveText(['Medium'])
-  await expect(editorAttribute(page, 'Importance').getByRole('button', { pressed: true })).toHaveText(['Mid'])
-  await expect(editorAttribute(page, 'Category').getByRole('button', { pressed: true })).toHaveText(['JS'])
+  await expect(chosenEditorOptions(page, 'Difficulty')).toHaveText(['Medium'])
+  await expect(chosenEditorOptions(page, 'Importance')).toHaveText(['Mid'])
+  await expect(chosenEditorOptions(page, 'Category')).toHaveText(['JS'])
   // The last choice of a required multiple attribute stays.
   await expect(editorOption(page, 'Category', 'JS')).toBeDisabled()
   await expect(editor(page).getByRole('button', { name: /^Clear / })).toHaveCount(0)
@@ -285,17 +286,17 @@ test('single choice holds one option, and optional attributes can be cleared', a
   ] as const) {
     await chooseEditorOption(page, attribute, first)
     await chooseEditorOption(page, attribute, second)
-    await expect(editorAttribute(page, attribute).getByRole('button', { pressed: true })).toHaveText([second])
+    await expect(chosenEditorOptions(page, attribute)).toHaveText([second])
   }
   await saveEditor(page)
   await expect(page.getByText('Question added')).toBeVisible()
   await openEditor(page, QUESTION)
-  await expect(editorAttribute(page, 'Team').getByRole('button', { pressed: true })).toHaveText(['Pink'])
+  await expect(chosenEditorOptions(page, 'Team')).toHaveText(['Pink'])
 
   await editor(page).getByRole('button', { name: 'Clear Region' }).click()
   await chooseEditorOption(page, 'Team', 'Pink') // a chosen chip lets go
-  await expect(editorAttribute(page, 'Region').getByRole('button', { pressed: true })).toHaveCount(0)
-  await expect(editorAttribute(page, 'Team').getByRole('button', { pressed: true })).toHaveCount(0)
+  await expect(chosenEditorOptions(page, 'Region')).toHaveCount(0)
+  await expect(chosenEditorOptions(page, 'Team')).toHaveCount(0)
   const saved = page.waitForRequest((req) => req.method() === 'PATCH')
   await saveEditor(page)
 
@@ -349,7 +350,7 @@ test('editing on a stale page shows and keeps what was added elsewhere', async (
     ['Category', 'Vue'],
     ['Region', 'South'],
   ] as const) {
-    await expect(editorOption(page, attribute, option)).toHaveAttribute('aria-pressed', 'true')
+    await expect(editorOption(page, attribute, option)).toHaveAttribute('data-state', /^(on|checked)$/)
   }
   await closeEditor(page)
   await expect(editor(page)).toBeHidden() // opening it changed nothing
@@ -374,7 +375,7 @@ test('a new question on a stale page starts from the current scenario', async ({
 
   await openNewEditor(page)
 
-  await expect(editorOption(page, 'Region', 'North')).toHaveAttribute('aria-pressed', 'true')
+  await expect(editorOption(page, 'Region', 'North')).toHaveAttribute('data-state', /^(on|checked)$/)
   await closeEditor(page)
   await expect(editor(page)).toBeHidden()
   await openNewEditor(page)
