@@ -78,7 +78,9 @@ async function appendOption() {
     <div class="attr-settings">
       <div class="field" role="group" aria-label="Selection mode">
         <label>Selection mode</label>
+        <!-- Changing the mode switches other settings off: only an explicit choice may do it. -->
         <Seg
+          manual
           :model-value="attribute.selectionMode"
           :options="modes"
           @update:model-value="setSelectionMode(attribute, $event as SelectionMode)"

@@ -234,7 +234,7 @@ p { text-wrap: pretty; }
 }
 .seg button:last-child { border-right: 0; }
 .seg button:hover { color: var(--fg); background: var(--surface-2); }
-.seg button[data-state="checked"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.seg button[data-state="checked"], .seg button[data-state="on"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
 /* attribute field: long or many labels wrap instead of widening the dialog */
 .attr-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

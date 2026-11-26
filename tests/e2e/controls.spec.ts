@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
 import { startSelectedPractice } from '../flows/practice'
+import { attributeCard, openScenarioEditor, openScenarios } from '../flows/scenarios'
 import { editor, filtersPanel, openContent, openNewEditor, questionRow } from '../flows/questions'
 import { resetUserData, seedQuestions } from '../support/reset'
 import { createFrontendScenario } from '../support/scenario-fixture'
@@ -91,4 +92,31 @@ test('practice progress exposes value and maximum', async ({ page }) => {
   await expect(progress).toHaveAttribute('aria-valuemax', '2')
   await page.getByRole('button', { name: 'Next question' }).click()
   await expect(progress).toHaveAttribute('aria-valuenow', '1')
+})
+
+test('arrowing across the selection mode changes nothing until it is chosen', async ({ page }) => {
+  await openScenarios(page)
+  await openScenarioEditor(page, scenario.name)
+  const card = attributeCard(page, 'Difficulty')
+  const mode = (name: string) => card.getByRole('group', { name: 'Selection mode' }).getByText(name, { exact: true })
+  const ordered = card.getByRole('switch', { name: 'Ordered' })
+
+  await mode('Single').focus()
+  for (const [key, reached] of [
+    ['ArrowRight', 'Multiple'],
+    ['ArrowLeft', 'Single'],
+  ] as const) {
+    // Held until the focus has arrived, as a person's key press is.
+    await page.keyboard.down(key)
+    await expect(mode(reached)).toBeFocused()
+    await page.waitForTimeout(100)
+    await page.keyboard.up(key)
+  }
+
+  await expect(ordered).toBeChecked()
+  await expect(mode('Single')).toHaveAttribute('data-state', /^(on|checked)$/)
+
+  await mode('Multiple').focus()
+  await page.keyboard.press('Enter')
+  await expect(ordered).not.toBeChecked()
 })

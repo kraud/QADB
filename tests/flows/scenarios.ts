@@ -98,7 +98,7 @@ export function optionLabelField(row: Locator): Locator {
 }
 
 export async function chooseSelectionMode(card: Locator, mode: 'Single' | 'Multiple') {
-  await card.getByRole('group', { name: 'Selection mode' }).getByRole('radio', { name: mode }).click()
+  await card.getByRole('group', { name: 'Selection mode' }).getByRole('button', { name: mode }).click()
 }
 
 export async function setSwitch(scope: Locator, name: 'Ordered' | 'Required' | 'Default', on: boolean) {
