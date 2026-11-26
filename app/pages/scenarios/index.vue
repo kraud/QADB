@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { contentPath } from '~/utils/scenario-route'
+import type { ScenarioSummary } from '#shared/types/qadb'
+import { contentPath, editScenarioPath } from '~/utils/scenario-route'
 
 const { scenarios, error, refresh } = useScenarios()
 
@@ -8,6 +9,8 @@ const nuxtApp = useNuxtApp()
 onMounted(() => {
   if (!nuxtApp.isHydrating) refresh()
 })
+
+const deleting = ref<ScenarioSummary | null>(null)
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 </script>
@@ -19,17 +22,25 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
         <h1>Scenarios</h1>
         <p class="sub">Each scenario has its own questions and attributes.</p>
       </div>
+      <Btn v-if="scenarios?.length" variant="secondary" to="/scenarios/new">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="width: 14px; height: 14px"><path d="M12 5v14M5 12h14" /></svg>
+        New scenario
+      </Btn>
     </div>
 
     <ul v-if="scenarios?.length" class="scenario-list">
-      <li v-for="s in scenarios" :key="s.id">
-        <NuxtLink class="mcard" :to="contentPath(s.id)">
+      <li v-for="s in scenarios" :key="s.id" class="mcard">
+        <NuxtLink class="scenario-open" :to="contentPath(s.id)">
           <div class="q">{{ s.name }}</div>
           <div class="stats">
             <span>{{ count(s.questionCount, 'question') }}</span>
             <span v-if="s.incompleteCount">{{ s.incompleteCount }} incomplete</span>
           </div>
         </NuxtLink>
+        <div class="scenario-actions">
+          <Btn variant="secondary" size="sm" :to="editScenarioPath(s.id)" :aria-label="`Edit ${s.name}`">Edit</Btn>
+          <Btn variant="danger" size="sm" :aria-label="`Delete ${s.name}`" @click="deleting = s">Delete</Btn>
+        </div>
       </li>
     </ul>
 
@@ -44,6 +55,7 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14" /></svg>
       </template>
+      <Btn to="/scenarios/new">Create scenario</Btn>
     </Empty>
 
     <ul v-else class="scenario-list" aria-hidden="true">
@@ -52,5 +64,7 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
         <Skeleton width="90px" style="margin-top: 10px" />
       </li>
     </ul>
+
+    <DeleteScenarioDialog :scenario="deleting" @close="deleting = null" />
   </div>
 </template>

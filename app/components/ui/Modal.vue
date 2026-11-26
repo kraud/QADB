@@ -16,7 +16,10 @@ const root = ref<HTMLElement | null>(null)
 
 function trapFocus(e: KeyboardEvent) {
   if (e.key !== 'Tab') return
-  const focusable = root.value?.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href]')
+  // Disabled controls take no focus, so they cannot be where tabbing turns around.
+  const focusable = root.value?.querySelectorAll<HTMLElement>(
+    'button:enabled, input:enabled, textarea:enabled, select:enabled, a[href]',
+  )
   if (!focusable || focusable.length === 0) return
   const first = focusable[0]!
   const last = focusable[focusable.length - 1]!
