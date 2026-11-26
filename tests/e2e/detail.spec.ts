@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Scenario } from '../../shared/scenario/types'
+import { visit } from '../flows/auth'
 import { currentQuestion, practiceProgress } from '../flows/practice'
 import {
   confirmDelete,
@@ -52,6 +53,14 @@ test('unknown id shows the 404 panel', async ({ page }) => {
   await expect(page.getByText('404 · PAGE NOT FOUND')).toBeVisible()
   await expect(page.getByRole('heading', { name: "This page doesn't exist." })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Back to content' })).toBeVisible()
+})
+
+test('an unknown address shows the not found page, which leads back', async ({ page }) => {
+  await visit(page, '/no-such-page')
+
+  await expect(page.getByRole('heading', { name: "This page doesn't exist." })).toBeVisible()
+  await page.getByRole('button', { name: 'Back to content' }).click()
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
 })
 
 test('shows every attribute value, the answer and the link', async ({ page }) => {

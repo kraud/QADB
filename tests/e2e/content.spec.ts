@@ -12,11 +12,12 @@ import {
   setPracticeCount,
   sortBy,
   toggleFilterChip,
+  toggleNoneChip,
   toggleRecentlyFailed,
   toggleSortDirection,
 } from '../flows/questions'
 import { recordAttempt, resetUserData, seedQuestions, type SeedQuestion } from '../support/reset'
-import { createFrontendScenario } from '../support/scenario-fixture'
+import { addAttribute, createFrontendScenario, json, optionValues } from '../support/scenario-fixture'
 
 const ALPHA = 'Alpha: what is a closure?'
 const BETA = 'Beta: how does flexbox work?'
@@ -152,6 +153,40 @@ test('values OR within a filter and AND across filters', async ({ page }) => {
   await expect(list).toHaveText([GAMMA])
   await toggleFilterChip(page, 'JS')
   await expect(list).toHaveText([ALPHA, GAMMA])
+})
+
+test('the None chip finds questions without a value, alone or beside options', async ({ page }) => {
+  const ids = await seedQuestions(page.request, scenario, BANK)
+  const changed = await addAttribute(page.request, scenario, {
+    name: 'Region',
+    labels: ['North', 'South'],
+    required: false,
+  })
+  for (const [index, region] of [
+    [0, 'North'],
+    [1, 'South'],
+  ] as const) {
+    const held = BANK[index]!
+    const values = optionValues(changed, {
+      Difficulty: [held.difficulty === 'easy' ? 'Easy' : 'Medium'],
+      Importance: [held.importance === 'high' ? 'High' : 'Low'],
+      Category: held.categories!,
+      Region: [region],
+    })
+    await json(page.request.patch(`/api/questions/${ids[index]}`, { data: { values } }))
+  }
+  await openContent(page, scenario.id)
+  const list = listedQuestions(page)
+
+  await toggleNoneChip(page, 'Region')
+  await expect(list).toHaveText([GAMMA, DELTA])
+  await toggleFilterChip(page, 'North') // OR within the attribute
+  await expect(list).toHaveText([ALPHA, GAMMA, DELTA])
+  await toggleFilterChip(page, 'Hard') // AND across attributes
+  await expect(list).toHaveText([GAMMA])
+  await toggleFilterChip(page, 'Hard')
+  await toggleNoneChip(page, 'Region')
+  await expect(list).toHaveText([ALPHA])
 })
 
 test('search matches every word', async ({ page }) => {

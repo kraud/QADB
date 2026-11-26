@@ -10,6 +10,7 @@ import {
   getQuery,
   getRouterParam,
   readBody,
+  setResponseHeader,
   setResponseStatus,
   toWebHandler,
   type EventHandler,
@@ -38,15 +39,26 @@ const ROUTES: [RouterMethod, string, () => Promise<{ default: EventHandler }>][]
   ['patch', '/api/questions/:id', () => import('../../server/api/questions/[id].patch')],
   ['delete', '/api/questions/:id', () => import('../../server/api/questions/[id].delete')],
   ['post', '/api/attempts', () => import('../../server/api/attempts.post')],
+  ['post', '/api/auth/register', () => import('../../server/api/auth/register.post')],
+  ['post', '/api/auth/login', () => import('../../server/api/auth/login.post')],
+  ['post', '/api/auth/logout', () => import('../../server/api/auth/logout.post')],
+  ['post', '/api/format-answer', () => import('../../server/api/format-answer.post')],
 ]
 
 /** Stands in for the sealed session cookie. */
 const USER_HEADER = 'x-test-user'
+/** Carries `ApiResponse.session` from the stubbed session helpers. */
+const SESSION_HEADER = 'x-test-session'
+
+/** Where the format route would send its request. Nothing listens there. */
+export const AI_URL = 'http://ai.invalid/v1/chat/completions'
 
 export interface ApiResponse {
   status: number
   // The wire format differs per route; tests assert on it directly.
   data: any
+  /** The user id the route signed in, or empty when it ended the session; absent otherwise. */
+  session?: string
 }
 
 export async function createApiTest() {
@@ -74,12 +86,25 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
     getRouterParam,
     readBody,
     setResponseStatus,
-    useRuntimeConfig: () => ({ tursoUrl: server.url, tursoToken: '' }),
+    useRuntimeConfig: () => ({ tursoUrl: server.url, tursoToken: '', opencodeApiKey: '', opencodeUrl: AI_URL }),
     getUserSession: async (event: H3Event) => ({ user: accounts.get(getHeader(event, USER_HEADER) ?? '') }),
+    setUserSession: async (event: H3Event, { user }: { user: AuthUser }) => {
+      accounts.set(user.id, user)
+      setResponseHeader(event, SESSION_HEADER, user.id)
+    },
+    clearUserSession: async (event: H3Event) => {
+      accounts.delete(getHeader(event, USER_HEADER) ?? '')
+      setResponseHeader(event, SESSION_HEADER, '')
+    },
+    // No test calls the real AI service: one that expects a request stubs its own `$fetch`.
+    $fetch: async () => {
+      throw new Error('Unexpected outgoing request')
+    },
   }
   for (const [name, value] of Object.entries(globals)) vi.stubGlobal(name, value)
-  // A token in the developer's shell is none of the test server's business.
+  // A token or key in the developer's shell is none of the tests' business.
   vi.stubEnv('TURSO_AUTH_TOKEN', '')
+  vi.stubEnv('OPENCODE_API_KEY', '')
   // `server/utils/db` connects at import time, so each test app needs its own copy.
   vi.resetModules()
 
@@ -88,6 +113,9 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
   vi.stubGlobal('db', db)
   vi.stubGlobal('getSessionUser', getSessionUser)
   vi.stubGlobal('requireUser', requireUser)
+  const { hashPassword, verifyPassword } = await import('../../server/utils/password')
+  vi.stubGlobal('hashPassword', hashPassword)
+  vi.stubGlobal('verifyPassword', verifyPassword)
 
   const app = createApp()
   app.use((await import('../../server/middleware/01.session')).default)
@@ -98,6 +126,8 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
 
   return {
     db: db as Db,
+    /** The throwaway database, for code that brings its own client. */
+    url: server.url,
 
     /** A request function signed in as `user`, or anonymous with `null`. */
     as(user: AuthUser | null) {
@@ -113,7 +143,8 @@ async function buildApiTest(server: Awaited<ReturnType<typeof startDbServer>>) {
           }),
         )
         const text = await response.text()
-        return { status: response.status, data: text ? JSON.parse(text) : null }
+        const session = response.headers.get(SESSION_HEADER) ?? undefined
+        return { status: response.status, data: text ? JSON.parse(text) : null, session }
       }
     },
 

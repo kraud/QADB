@@ -25,7 +25,7 @@ import {
   toggleBulkOption,
   toggleFilterChip,
 } from '../flows/questions'
-import { fetchQuestion, resetUserData, seedQuestions } from '../support/reset'
+import { deleteQuestion, fetchQuestion, resetUserData, seedQuestions } from '../support/reset'
 import {
   addAttribute,
   createFrontendScenario,
@@ -267,6 +267,23 @@ test('a refusal by the server shows its count and reads the list again', async (
   await expect(questionRow(page, FIRST).getByTitle('Category')).toHaveText('JS')
   await page.keyboard.press('Escape')
   await expect(bulkDialog(page)).toHaveCount(0)
+})
+
+test('a selected question deleted elsewhere: nothing is changed', async ({ page }) => {
+  const [first, second] = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
+  await openContent(page, scenario.id)
+  await selectAllShown(page)
+  await openBulkEditor(page)
+  await chooseBulkAttribute(page, 'Difficulty')
+  await toggleBulkOption(page, 'Hard')
+  await deleteQuestion(page.request, second!)
+
+  await applyButton(page).click()
+
+  await expect(bulkDialog(page).getByRole('alert')).toHaveText(CHANGED)
+  await expect(listedQuestions(page)).toHaveText([FIRST])
+  await expect(bulkDialog(page).getByRole('status')).toHaveText('1 question will change.')
+  expect(await held(page, scenario, [first!], 'Difficulty')).toEqual([['Medium']])
 })
 
 test('Apply sends one request and the dialog stays while it runs', async ({ page }) => {

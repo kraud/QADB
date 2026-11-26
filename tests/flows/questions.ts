@@ -92,6 +92,14 @@ export async function toggleFilterChip(page: Page, name: string) {
   await reloadingList(page, () => filtersPanel(page).getByRole('button', { name, exact: true }).click())
 }
 
+/** Toggles the "None" chip of an attribute, which finds the questions without a value for it. */
+export async function toggleNoneChip(page: Page, attribute: string) {
+  const chip = filtersPanel(page)
+    .getByRole('group', { name: attribute, exact: true })
+    .getByRole('button', { name: 'None', exact: true })
+  await reloadingList(page, () => chip.click())
+}
+
 export async function chooseFilterOption(
   page: Page,
   group: 'Never been done' | 'Mastered',

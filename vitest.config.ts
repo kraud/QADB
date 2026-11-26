@@ -18,6 +18,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['server/**', 'shared/**', 'app/utils/**', 'app/stores/**'],
+      // Components, pages and composables are covered by the end-to-end tests.
+      thresholds: { lines: 90 },
     },
   },
 })

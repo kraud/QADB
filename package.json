@@ -8,6 +8,7 @@
     "db:local": "sqld --no-welcome -d .localdb --http-listen-addr 127.0.0.1:8080",
     "db:migrate": "node scripts/db/migrate.mjs",
     "db:reset-local": "node scripts/db/reset-local.mjs",
+    "db:seed-demo": "node scripts/db/seed-demo.mjs",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

@@ -72,6 +72,22 @@ test('curated practice follows table order when the switch is on', async ({ page
   await expect(page.getByRole('heading', { name: 'No more questions' })).toBeVisible()
 })
 
+test('curated practice with the switch off asks each selected question once', async ({ page }) => {
+  await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }, { question: THIRD }])
+  await openContent(page, scenario.id)
+
+  await startSelectedPractice(page, [FIRST, THIRD], false) // shuffled, so the order is not fixed
+
+  const seen: string[] = []
+  for (const number of [1, 2]) {
+    await expect(practiceProgress(page)).toHaveText(`Question ${number} of 2`)
+    seen.push(await currentQuestion(page).innerText())
+    await nextQuestion(page)
+  }
+  await expect(page.getByRole('heading', { name: 'No more questions' })).toBeVisible()
+  expect(seen.sort()).toEqual([FIRST, THIRD])
+})
+
 test('grading records an attempt; Next records none', async ({ page }) => {
   const [first, second] = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
   const attemptRequests: string[] = []

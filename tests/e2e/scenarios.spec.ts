@@ -5,8 +5,10 @@ import { answerCurrent, currentQuestion, showAnswer, startSelectedPractice } fro
 import {
   answerField,
   chooseEditorOption,
+  incompleteBanner,
   listedQuestions,
   openContent,
+  openEditor,
   openNewEditor,
   questionField,
   questionRow,
@@ -46,6 +48,7 @@ import {
 } from '../flows/scenarios'
 import { fetchQuestion, resetUserData, seedQuestion, seedQuestions } from '../support/reset'
 import {
+  addAttribute as addAttributeByApi,
   createFrontendScenario,
   createScenario as createScenarioByApi,
   FRONTEND_SCENARIO,
@@ -359,6 +362,109 @@ test('rename, recolor and reorder show up in the table', async ({ page }) => {
   ])
   await page.getByRole('navigation').getByRole('link', { name: 'Scenarios' }).click()
   await expect(scenarioCard(page, 'Interviews')).toContainText('1 question')
+})
+
+/** Opens the editor of the front-end scenario from the list. */
+async function editFrontend(page: Page) {
+  await openScenarios(page)
+  await openScenarioEditor(page, NAME)
+}
+
+test('an added option is applied directly and can be chosen', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  const question = await seedQuestion(page.request, scenario, { question: FIRST, difficulty: 'easy' })
+  await editFrontend(page)
+
+  await addOption(attributeCard(page, 'Difficulty'), { label: 'Expert' })
+  await saveScenario(page)
+
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  expect(await heldLabels(page, scenario.id, question, 'Difficulty')).toEqual(['Easy'])
+  await openEditor(page, FIRST)
+  await chooseEditorOption(page, 'Difficulty', 'Expert')
+  await saveEditor(page)
+  await expect(questionRow(page, FIRST)).toContainText('Expert')
+})
+
+test('an added optional attribute leaves questions empty and complete', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  const question = await seedQuestion(page.request, scenario, { question: FIRST })
+  await editFrontend(page)
+
+  await addAttribute(page, { name: 'Region', options: [{ label: 'North', isDefault: true }, { label: 'South' }] })
+  await saveScenario(page)
+
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  await expect(questionRow(page, FIRST).getByTitle('Region')).toHaveText('—')
+  await expect(incompleteBanner(page)).toHaveCount(0)
+  // Defaults are for new questions only.
+  expect(await heldLabels(page, scenario.id, question, 'Region')).toEqual([])
+  expect((await fetchQuestion(page.request, question)).incomplete).toBe(false)
+})
+
+test('turning Required on makes the questions without a value incomplete', async ({ page }) => {
+  const created = await createFrontendScenario(page.request)
+  const scenario = await addAttributeByApi(page.request, created, {
+    name: 'Region',
+    labels: ['North', 'South'],
+    required: false,
+  })
+  const [without] = await seedQuestions(page.request, scenario, [{ question: FIRST }])
+  await openContent(page, scenario.id)
+  await expect(listedQuestions(page)).toHaveText([FIRST])
+  await expect(incompleteBanner(page)).toHaveCount(0)
+  await editFrontend(page)
+
+  await setSwitch(attributeCard(page, 'Region'), 'Required', true)
+  await saveScenario(page)
+
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  await expect(incompleteBanner(page)).toContainText('1 incomplete question')
+  await expect(questionRow(page, FIRST).getByText('Incomplete', { exact: true })).toBeVisible()
+  expect((await fetchQuestion(page.request, without!)).incomplete).toBe(true)
+})
+
+test('moving to an option a question already has keeps it once', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  const [both, one] = await seedQuestions(page.request, scenario, [
+    { question: FIRST, categories: ['CSS', 'JS'] },
+    { question: SECOND, categories: ['CSS'] },
+  ])
+  await editFrontend(page)
+
+  await deleteOption(attributeCard(page, 'Category'), 'CSS')
+  await saveScenario(page)
+  await expect(changesDialog(page)).toContainText('2 questions use “CSS” (Category).')
+  await optionChoice(page, 'CSS').selectOption({ label: 'Move to JS' })
+  await confirmChanges(page)
+
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  await expect(questionRow(page, FIRST).getByTitle('Category')).toHaveText('JS')
+  expect(await heldLabels(page, scenario.id, both!, 'Category')).toEqual(['JS'])
+  expect(await heldLabels(page, scenario.id, one!, 'Category')).toEqual(['JS'])
+})
+
+test('single to multiple is applied directly and switches Ordered off', async ({ page }) => {
+  const scenario = await createFrontendScenario(page.request)
+  const question = await seedQuestion(page.request, scenario, { question: FIRST, difficulty: 'hard' })
+  await editFrontend(page)
+  const card = attributeCard(page, 'Difficulty')
+  await expect(card.getByRole('checkbox', { name: 'Ordered' })).toBeChecked()
+
+  await chooseSelectionMode(card, 'Multiple')
+  await expect(card.getByRole('checkbox', { name: 'Ordered' })).not.toBeChecked()
+  await saveScenario(page)
+
+  // No confirmation on the way.
+  await expect(page).toHaveURL(`/scenarios/${scenario.id}/content`)
+  const stored = await readScenario(page, scenario.id)
+  expect(stored.attributes[0]).toMatchObject({ selectionMode: 'multiple', ordered: false })
+  expect(await heldLabels(page, scenario.id, question, 'Difficulty')).toEqual(['Hard'])
+  await expect(page.getByRole('combobox', { name: 'Sort by' }).getByRole('option', { name: 'Difficulty' })).toHaveCount(0)
+  await openEditor(page, FIRST)
+  await chooseEditorOption(page, 'Difficulty', 'Easy')
+  await saveEditor(page)
+  await expect(questionRow(page, FIRST).getByTitle('Difficulty')).toHaveText('EasyHard')
 })
 
 test('delete an option in use: move; then delete another: leave empty', async ({ page }) => {
