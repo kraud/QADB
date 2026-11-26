@@ -22,8 +22,12 @@ logs
 *.db
 *.db-*
 dev.db*
+.localdb/
 
 # Misc
 .DS_Store
 .fleet
 .idea
+
+# Claude
+.claude
