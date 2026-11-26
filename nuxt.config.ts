@@ -23,6 +23,8 @@ export default defineNuxtConfig({
     tursoUrl: '',
     tursoToken: '',
     opencodeApiKey: '',
+    // Chat completions endpoint behind "Format with AI"; override with NUXT_OPENCODE_URL.
+    opencodeUrl: 'https://opencode.ai/zen/go/v1/chat/completions',
     sessionPassword: '',
     session: {
       cookie: {

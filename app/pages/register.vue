@@ -30,7 +30,7 @@ async function submit() {
     })
     await fetchSession()
     practice.clear()
-    await navigateTo('/content')
+    await navigateTo('/')
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode
     if (status === 409) {

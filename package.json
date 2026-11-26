@@ -5,10 +5,17 @@
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
+    "db:local": "sqld --no-welcome -d .localdb --http-listen-addr 127.0.0.1:8080",
+    "db:migrate": "node scripts/db/migrate.mjs",
+    "db:reset-local": "node scripts/db/reset-local.mjs",
+    "db:seed-demo": "node scripts/db/seed-demo.mjs",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
@@ -21,13 +28,17 @@
     "nuxt": "^4.5.2",
     "nuxt-auth-utils": "^0.5.30",
     "pinia": "^4.0.3",
+    "reka-ui": "^2.11.0",
     "vue": "^3.5.41",
     "vue-router": "^5.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.10",
+    "@playwright/test": "^1.64",
+    "@vitest/coverage-v8": "^4.1",
+    "h3": "1.15.11",
     "typescript": "^5.9.3",
+    "vitest": "^4.1",
     "vue-tsc": "^3.3.9"
   }
 }

@@ -10,12 +10,13 @@ let nextId = 1
 
 export function useToast() {
   function toast(text: string) {
-    const id = nextId++
-    toasts.value.push({ id, text })
-    setTimeout(() => {
-      toasts.value = toasts.value.filter((t) => t.id !== id)
-    }, 2400)
+    toasts.value.push({ id: nextId++, text })
   }
 
-  return { toasts, toast }
+  /** Called when a toast's time is up, or it is swiped away. */
+  function dismiss(id: number) {
+    toasts.value = toasts.value.filter((t) => t.id !== id)
+  }
+
+  return { toasts, toast, dismiss }
 }

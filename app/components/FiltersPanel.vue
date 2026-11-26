@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { Filters } from '#shared/types/qadb'
-import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL } from '#shared/enums'
+import { colorVar } from '#shared/scenario/colors'
+import { countActiveFilters, type Filters } from '#shared/scenario/query'
+import type { Attribute, Scenario } from '#shared/scenario/types'
 
-const props = defineProps<{ filters: Filters; open?: boolean }>()
+const props = defineProps<{ scenario: Scenario; filters: Filters; open?: boolean }>()
 const emit = defineEmits<{ (e: 'change'): void; (e: 'reset'): void }>()
 
 const nbdOptions = [
@@ -16,23 +17,23 @@ const masteredOptions = [
   { value: 'no', label: 'No' },
 ]
 
-const activeCount = computed(() => {
-  let n = 0
-  if (props.filters.diff.length) n++
-  if (props.filters.imp.length) n++
-  if (props.filters.cat.length) n++
-  if (props.filters.nbd !== 'all') n++
-  if (props.filters.mastered !== 'all') n++
-  if (props.filters.op !== 'all') n++
-  if (props.filters.recent) n++
-  if (props.filters.q.trim()) n++
-  return n
-})
+const activeCount = computed(() => countActiveFilters(props.filters, props.scenario))
 
-function toggle(list: string[], value: string) {
-  const i = list.indexOf(value)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(value)
+/** Stands for the "None" chip among an attribute's options: ids have no colon. */
+const NONE = ':none'
+
+const chosen = (attribute: Attribute) => [
+  ...attribute.options.map((o) => o.id).filter((id) => props.filters.options.includes(id)),
+  ...(props.filters.none.includes(attribute.id) ? [NONE] : []),
+]
+
+function setChosen(attribute: Attribute, next: string[]) {
+  const own = new Set(attribute.options.map((o) => o.id))
+  props.filters.options = [...props.filters.options.filter((id) => !own.has(id)), ...next.filter((id) => id !== NONE)]
+  props.filters.none = [
+    ...props.filters.none.filter((id) => id !== attribute.id),
+    ...(next.includes(NONE) ? [attribute.id] : []),
+  ]
   emit('change')
 }
 
@@ -46,78 +47,45 @@ function onAmountInput(e: Event) {
   emit('change')
 }
 
-function onOpChange(e: Event) {
-  props.filters.op = (e.target as HTMLSelectElement).value as '>' | '<' | '='
-  emit('change')
-}
+const operatorOptions = ['all', '>', '<', '='].map((value) => ({ value, label: value }))
 
-function reset() {
-  props.filters.diff = []
-  props.filters.imp = []
-  props.filters.cat = []
-  props.filters.nbd = 'all'
-  props.filters.mastered = 'all'
-  props.filters.op = 'all'
-  props.filters.n = 0
-  props.filters.recent = false
-  props.filters.q = ''
-  emit('reset')
+function onOpChange(op: string) {
+  props.filters.op = op as typeof props.filters.op
+  emit('change')
 }
 </script>
 
 <template>
   <aside class="filters" :class="{ open }">
-    <div class="filter-group">
-      <p class="filter-title">Difficulty</p>
-      <div class="chip-group">
-        <Chip v-for="v in DIFFICULTY" :key="v" :active="filters.diff.includes(v)" @click="toggle(filters.diff, v)">
-          {{ DIFFICULTY_LABEL[v as keyof typeof DIFFICULTY_LABEL] }}
+    <div v-for="attribute in scenario.attributes" :key="attribute.id" class="filter-group" role="group" :aria-label="attribute.name">
+      <p class="filter-title">{{ attribute.name }}</p>
+      <ChipGroup type="multiple" :model-value="chosen(attribute)" @update:model-value="setChosen(attribute, $event)">
+        <Chip v-for="option in attribute.options" :key="option.id" :value="option.id" :color="colorVar(option.color)">
+          {{ option.label }}
         </Chip>
-      </div>
+        <Chip :value="NONE">None</Chip>
+      </ChipGroup>
     </div>
 
-    <div class="filter-group">
-      <p class="filter-title">Importance</p>
-      <div class="chip-group">
-        <Chip v-for="v in IMPORTANCE" :key="v" :active="filters.imp.includes(v)" @click="toggle(filters.imp, v)">
-          {{ IMPORTANCE_LABEL[v as keyof typeof IMPORTANCE_LABEL] }}
-        </Chip>
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <p class="filter-title">Category</p>
-      <div class="chip-group">
-        <Chip v-for="v in CATEGORY" :key="v" :active="filters.cat.includes(v)" :color="CATEGORY_COLOR[v as keyof typeof CATEGORY_COLOR]" @click="toggle(filters.cat, v)">
-          {{ v }}
-        </Chip>
-      </div>
-    </div>
-
-    <div class="filter-group">
+    <div class="filter-group" role="group" aria-label="Never been done">
       <p class="filter-title">Never been done <span class="tip">— no attempts yet</span></p>
       <Seg :model-value="filters.nbd" :options="nbdOptions" @update:model-value="setSeg('nbd', $event)" />
     </div>
 
-    <div class="filter-group">
+    <div class="filter-group" role="group" aria-label="Mastered">
       <p class="filter-title">Mastered</p>
       <Seg :model-value="filters.mastered" :options="masteredOptions" @update:model-value="setSeg('mastered', $event)" />
     </div>
 
-    <div class="filter-group">
+    <div class="filter-group" role="group" aria-label="Track record amount">
       <p class="filter-title">Track record amount</p>
       <div class="filter-row">
-        <select class="select" aria-label="Operator" :value="filters.op" @change="onOpChange">
-          <option value="all">all</option>
-          <option value=">">&gt;</option>
-          <option value="<">&lt;</option>
-          <option value="=">=</option>
-        </select>
+        <Select aria-label="Operator" size="sm" :model-value="filters.op" :options="operatorOptions" @update:model-value="onOpChange" />
         <input class="input num" type="number" min="0" step="1" :value="filters.n || ''" placeholder="0" aria-label="Practice count" :disabled="filters.op === 'all'" @input="onAmountInput" />
       </div>
     </div>
 
-    <div class="filter-group">
+    <div class="filter-group" role="group" aria-label="Recently failed">
       <p class="filter-title">Recently failed</p>
       <Switch
         :model-value="filters.recent"
@@ -127,9 +95,18 @@ function reset() {
       />
     </div>
 
+    <div v-if="scenario.attributes.length" class="filter-group" role="group" aria-label="Missing values">
+      <p class="filter-title">Missing values <span class="tip">— required ones</span></p>
+      <Switch
+        :model-value="filters.incomplete"
+        label="Incomplete"
+        @update:model-value="filters.incomplete = $event; emit('change')"
+      />
+    </div>
+
     <div class="filter-footer">
       <span class="active-count"><b>{{ activeCount }}</b> active</span>
-      <Btn variant="ghost" size="sm" @click="reset">Reset filters</Btn>
+      <Btn variant="ghost" size="sm" @click="emit('reset')">Reset filters</Btn>
     </div>
   </aside>
 </template>

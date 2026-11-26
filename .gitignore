@@ -13,6 +13,12 @@ node_modules
 logs
 *.log
 
+# Test output
+coverage/
+playwright-report/
+test-results/
+recording/videos/
+
 # Local env files
 .env
 .env.*
@@ -22,8 +28,12 @@ logs
 *.db
 *.db-*
 dev.db*
+.localdb/
 
 # Misc
 .DS_Store
 .fleet
 .idea
+
+# Claude
+.claude

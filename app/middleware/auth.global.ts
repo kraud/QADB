@@ -1,15 +1,8 @@
+/** Everything else needs a session. */
+const PUBLIC_PATHS = ['/', '/login', '/register']
+
 export default defineNuxtRouteMiddleware((to) => {
-  if (to.path === '/login' || to.path === '/register' || to.path === '/') {
-    return
-  }
-
-  const needsAuth =
-    to.path === '/content' ||
-    to.path.startsWith('/questions') ||
-    to.path === '/practice' ||
-    to.path.startsWith('/practice/')
-
-  if (!needsAuth) return
+  if (PUBLIC_PATHS.includes(to.path)) return
 
   const { loggedIn } = useUserSession()
   if (!loggedIn.value) {

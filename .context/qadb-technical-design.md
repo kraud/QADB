@@ -1,278 +1,255 @@
 ## Technical Design
 
-### Overview & Stack
+Describes the app as it is. Vocabulary: [`docs/glossary.md`](../docs/glossary.md). Decisions behind
+the generic model: [`docs/superpowers/specs/2026-11-26-generic-scenarios-design.md`](../docs/superpowers/specs/2026-11-26-generic-scenarios-design.md).
+Setup and commands: [`README.md`](../README.md).
 
-- **Nuxt 3** — Vue 3 + Nitro server; file-based pages and `server/api` routes in one deploy unit. Vue SFC templates map 1:1 to the interactive prototype at the repo root (`qadb-prototype.html`), which is the UI source of truth — every screen, component, state, and copy string is ported from it (see "Resolved UI Decisions" and "Implementation Phases").
-- **Turso** — libSQL (SQLite-wire-compatible) over network; generous free tier, edge-friendly, single small DB; local dev uses a local libSQL file.
-- **Drizzle ORM** (`drizzle-orm`) with the **libSQL adapter** (`drizzle-orm/libsql`) and `@libsql/client`; schema as code; migrations via `drizzle-kit`.
-- **Custom username/password auth** — `nuxt-auth-utils` for sealed session cookies; argon2id password hashing (`@node-rs/argon2`) with PBKDF2 fallback (see Assumptions).
-- **Pinia** — server-less client state; primary use is the practice-session queue/store.
-- **TypeScript** end to end; **zod** for request validation on server routes; **shared constants** in `shared/enums.ts` imported by both client and server.
-- **Deploy: Vercel** — Nitro auto-selects the `vercel` preset; serverless functions, free Hobby tier, auto HTTPS + random `.vercel.app` domain.
+### Overview and stack
 
-### Project Structure (Nuxt 3, logical — visual design per prototype)
+A generic question-and-answer bank with practice sessions and a track record. Each user creates
+**scenarios** and defines their **attributes** and **options**; question, answer, link, mastered flag
+and attempts are the same in every scenario.
+
+- **Nuxt 4** (Vue 3 + Nitro): pages and `server/api` routes in one deploy unit.
+- **libSQL** (Turso when deployed, `sqld` locally) through **Drizzle ORM** and the HTTP-only client
+  (`@libsql/client/http`, `drizzle-orm/libsql/http`). The native client cannot be bundled for the
+  serverless target, so `file:` URLs are not supported.
+- **Auth:** `nuxt-auth-utils` sealed session cookies; argon2id hashing (`@node-rs/argon2`) with a
+  PBKDF2 fallback.
+- **Pinia** for the practice session. **zod** for request validation. **TypeScript** throughout.
+- **Components:** [Reka UI](https://reka-ui.com) (headless), styled in `app/assets/tokens.css`.
+  Two workarounds live in the wrappers: `ui/Toast` keeps its own live region because Reka 2.11 hides
+  its announcement from screen readers, and `ui/Modal` takes focus back on Tab when a button disabled
+  itself.
+- **Deploy:** Vercel (Nitro preset auto-detected).
+
+### Project structure
 
 ```
-app/                       # Nuxt 4-style app/ dir (or project root under Nuxt 3 — pick the scaffold default)
-  components/
-    AppHeader.vue          # brand, nav, user chip + logout, theme toggle, always-visible "Random Question" button
-    ui/                    # primitives ported from the prototype: Btn, Badge, Chip, Seg, Switch, Checkbox, Input, Modal, Toast, Empty, Skeleton
-    FiltersPanel.vue       # difficulty/importance/category multi-select + NBD/Mastered/amount/recently-failed
-    SortControl.vue        # key + asc/desc
-    QuestionTable.vue      # desktop table + mobile card list; row selection, check-all (indeterminate), row actions
-    QuestionEditorModal.vue# create/edit form + mastered toggle + danger zone + delete confirm
-    PracticeCard.vue       # prompt, show-answer, correct/incorrect, mastered toggle, next, progress
-    TrackRecord.vue        # times practiced + % + chronological list (full on detail, compact in practice)
-  pages/
-    index.vue             # redirect to /content (authed) or /login
-    login.vue
-    register.vue
-    content.vue           # the content section (table + filters + sort + select + start practice)
-    questions/[id].vue     # question detail; full track-record history; reversible mastered toggle
-    practice.vue           # curated practice (selected subset) — reads queue from store
-    practice/random.vue    # standalone random practice — builds queue from all ids, shuffle
-  stores/practice.ts      # Pinia: { queue: string[], index: number, mode } mirrored to sessionStorage
-  utils/shuffle.ts        # Fisher–Yates
-  utils/format.ts         # relative time ("2d ago") + date/time formatting for history
-shared/enums.ts           # DIFFICULTY, IMPORTANCE, CATEGORY constants + zod enums (imported both sides)
+app/
+  components/        AppHeader, ScenarioSwitcher, FiltersPanel, SortControl, QuestionTable,
+                     IncompleteBanner, BulkEditDialog, QuestionEditorModal, AttributeField,
+                     AttributeBadges, PracticeSession, PracticeCard, TrackRecord, ConfirmDialog
+    scenario/        ScenarioForm, AttributeCard, OptionRow, ColorPicker,
+                     ResolveChangesDialog, DeleteScenarioDialog
+    ui/              primitives. Select, Modal, Toast, Switch, Checkbox, Seg, ChipGroup/Chip and
+                     Progress wrap Reka UI (as does scenario/ColorPicker); pages use only these
+                     wrappers. Btn, Badge, Input, Empty and Skeleton are plain Vue
+  composables/       useApi, useScenario, useTheme, useToast, keepFocus
+  pages/             see "Screens"
+  stores/practice.ts
+  utils/             format, markdown, shuffle, scenario-form, scenario-route
+  assets/tokens.css  design tokens, including the option color palette (light and dark)
+shared/
+  scenario/          types, schema (zod), values, diff, bulk, query, colors
+  types/             wire types
 server/
-  api/
-    auth/register.post.ts
-    auth/login.post.ts
-    auth/logout.post.ts
-    questions/index.get.ts        # list with filters + sort + selection context
-    questions/index.post.ts      # create
-    questions/[id].get.ts        # detail incl. attempts history
-    questions/[id].patch.ts      # update (incl. mastered toggle)
-    questions/[id].delete.ts     # delete (cascade attempts)
-    questions/ids.get.ts         # lightweight list of {id} for standalone random shuffle
-    attempts.post.ts             # record a correct/incorrect answer
-  utils/
-    db.ts          # drizzle client + Turso env wiring
-    auth.ts        # getSession/requireSession wrappers over nuxt-auth-utils
-    password.ts    # hashPassword/verifyPassword (argon2id or PBKDF2 fallback)
-  middleware/01.session.ts       # attach session -> event.context.user
-db/schema.ts                     # drizzle table definitions
-drizzle.config.ts
-nuxt.config.ts                  # runtimeConfig: turso url/token, session secret
-.env / .env.example
-vercel.json                      # (optional; Nitro preset usually auto-detects)
+  api/               routes: parse the request, call a service
+  services/          scenarios, questions, bulk, incomplete
+  middleware/01.session.ts
+  utils/             db, auth, password
+db/schema.ts         Drizzle tables, mirroring the migrations
+db/migrations/       the baseline SQL
+scripts/db/          migrate, migrations/, reset-local, seed-demo, guard (local-URL check)
+tests/               unit/, api/, e2e/, flows/, support/
 ```
 
-- **Visual/UX design is settled** in the interactive prototype (`qadb-prototype.html`); this section keeps the route-level contract only. `middleware/auth.global.ts` (or a `protected` route middleware) redirects unauthenticated users from `/content`, `/questions/*`, `/practice*` to `/login`.
-- Pages reference data via Nuxt `useFetch`/`$fetch` to the `server/api` routes; the Pinia store owns the practice queue only.
+`shared/scenario/` holds the rules both sides apply, so the client can show what the server will
+decide: validation, default and missing values, what an edit takes away, what a bulk edit changes,
+and the question list's query string.
 
-### Data Model (Drizzle schema, libSQL/SQLite)
+### Data model
 
-Three tables, integer timestamps (unix ms), text PKs (cuid/uuid generated in app).
+IDs are text (cuid2), timestamps unix milliseconds.
 
-**`users`**
-- `id` text PK
-- `username` text UNIQUE NOT NULL
-- `password_hash` text NOT NULL
-- `created_at` integer NOT NULL default (now)
-- Indexes: unique on `username`.
+| Table | Columns |
+|---|---|
+| `users` | `id`, `username` (unique), `password_hash`, `created_at` |
+| `scenarios` | `id`, `user_id` → users, `name`, `created_at`, `updated_at` |
+| `attributes` | `id`, `scenario_id` → scenarios, `name`, `selection_mode` (`single`/`multiple`), `ordered`, `required`, `position` |
+| `options` | `id`, `attribute_id` → attributes, `label`, `color` (palette key), `position`, `is_default` |
+| `questions` | `id`, `scenario_id` → scenarios, `question`, `answer` (Markdown), `link`, `mastered`, `created_at`, `updated_at` |
+| `question_options` | `question_id` → questions, `option_id` → options; primary key on both; index on `option_id` |
+| `attempts` | `id`, `question_id` → questions, `user_id` → users, `correct` (0/1), `answered_at` |
+| `_migrations` | `id`, `applied_at` |
 
-**`questions`**
-- `id` text PK
-- `user_id` text NOT NULL → `users.id` ON DELETE CASCADE
-- `question` text NOT NULL
-- `answer_summary` text NOT NULL (short, spoken-style; Markdown source — rendered read-only in practice and detail; edited as raw Markdown in the editor; raw HTML allowed and sanitized)
-- `difficulty` text NOT NULL  (app-validated: easy|medium|hard)
-- `importance` text NOT NULL   (app-validated: low|mid|high)
-- `category` text NOT NULL      (app-validated: HTML|CSS|JS|API|React; others added via `shared/enums.ts`)
-- `link` text (nullable)        (direct GreatFrontend URL)
-- `mastered` integer NOT NULL default 0  (0/1)
-- `created_at` integer NOT NULL default (now)
-- `updated_at` integer NOT NULL default (now)
-- Indexes: on `user_id`; compound `(user_id, category)`, `(user_id, difficulty)`, `(user_id, importance)` to back filters.
+- Every foreign key cascades on delete, so deleting a scenario, attribute, option or question
+  removes what depends on it. Tests prove this on `sqld`.
+- A question has no `user_id`: ownership comes from its scenario.
+- The app enforces what the database cannot: at most one option for a single-mode attribute, and
+  only options of the question's own scenario.
+- Multi-row writes are one `db.batch` transaction. Where a concurrent change could invalidate what
+  was checked, a guard statement in the same batch inserts an invalid row to fail it; the service
+  then reports the problem (404, 409 or 422).
 
-**`attempts`** (track record — one row per answer event)
-- `id` text PK
-- `question_id` text NOT NULL → `questions.id` ON DELETE CASCADE
-- `user_id` text NOT NULL → `users.id` ON DELETE CASCADE (denormalized for direct scoping; app maintains invariant `attempt.user_id == question.user_id`)
-- `correct` integer NOT NULL  (0|1)
-- `answered_at` integer NOT NULL default (now)
-- Indexes: `(question_id, answered_at DESC)`, `(user_id, answered_at DESC)`.
+### Migrations and local data
 
-**Per-question stats (computed, not stored)** — built as a Drizzle view/subquery reused by list, filter, sort, detail:
-- `attempt_count` = `COUNT(attempts.*)` per `question_id` (LEFT JOIN; 0 when none).
-- `correct_count` = `SUM(correct)` per `question_id` (0 when none).
-- `last_answered_at` = `MAX(answered_at)`.
-- `last_correct` = the `correct` value of the attempt with the greatest `answered_at` for that question, via correlated subquery: `(SELECT correct FROM attempts a WHERE a.question_id = questions.id ORDER BY a.answered_at DESC LIMIT 1)`. NULL when no attempts.
-- `track_record_pct` = `correct_count * 100.0 / attempt_count` (NULL when `attempt_count = 0`; the client renders "—", and sorting treats NULL as the lowest value — equivalent to 0).
-- NBD (never been done) ⇔ `attempt_count = 0`.
-- Recently failed ⇔ `last_correct = 0` AND `attempt_count > 0`.
+- `scripts/db/migrate.mjs` is the only way to change the schema. It applies each pending migration
+  and records it in `_migrations` in one transaction. A database that already has the baseline tables
+  is only marked. It reads the address and auth token from the environment only, and remote addresses
+  need `--allow-remote`. Pushing a schema straight to a database can drop data, so the project has no
+  tool or configuration for it (a test keeps it so).
+- `0001-scenarios` replaced the fixed difficulty, importance and category columns: it creates a
+  "Front-end interview questions" scenario for each user with questions, converts the values to
+  `question_options`, removes five named test accounts, and verifies counts, option sets and foreign
+  keys before committing. Any unmapped value or failed check changes nothing.
+- `reset-local.mjs` restores the local database from a backup, refusing a source file inside the
+  directory it clears. `seed-demo.mjs` creates the two demo scenarios for one user, on local
+  databases only.
 
-### Database Setup (Turso + Drizzle)
+### Scenario rules
 
-- Install Turso CLI; `turso db create qadb` → database URL. `turso db tokens create qadb` → auth token.
-- `nuxt.config.ts` `runtimeConfig`: `tursoUrl`, `tursoToken`, `sessionPassword` (all server-only, set from Vercel env vars).
-- `server/utils/db.ts`: `createClient({ url: runtimeConfig.tursoUrl, authToken: runtimeConfig.tursoToken })` from `@libsql/client`, wrapped by `drizzle(client, { schema })`.
-- Local dev: `tursoUrl` can point to `file:./dev.db` (local libSQL) via `.env` to avoid network during dev.
-- Schema/migrations: `drizzle-kit` — `pnpm drizzle-kit generate` to produce SQL migrations, `pnpm drizzle-kit push` for dev. Production migrations run via a one-off `npx drizzle-kit push` against the Turso DB (or a `db:migrate` script in `package.json`). *Migration strategy details unverified — confirm current `drizzle-kit` vs libSQL workflow during future setup.*
+- Name required, unique per user ignoring case. Zero or more attributes with unique names.
+- An attribute has at least 2 options with unique labels. Only single selection can be ordered.
+- Default options (one in single mode, any number in multiple) preselect new questions only.
+- Required attributes must be filled on new questions and when values are edited.
+- The editor saves the whole scenario in one request. Changes that affect questions need a choice,
+  or the server answers 409 with the conflicts and their counts. The editor then reads the scenario
+  again, discards every earlier confirmation and asks about each change with the current counts (also
+  on later saves from the same form); the form keeps its edits.
 
-### Authentication (custom username/password)
+| Change | Choice |
+|---|---|
+| Delete an option in use | Move its questions to another option, or leave them empty |
+| Delete an attribute in use | Confirm |
+| Multiple → single with questions holding several | Confirm; each keeps the first in option order |
 
-- **Register** (`POST /api/auth/register`, body `{ username, password }` zod-validated):
-  - Reject if `username` already exists (unique constraint → 409).
-  - `password.ts` → `hashPassword(password)` (argon2id).
-  - Insert `users` row; create a sealed session via `nuxt-auth-utils` `setUserSession` containing `{ userId, username }`; return the public user object.
-  - Password rules (zod): minimum length 8; username 3–32, alphanumeric/`-`/`_`.
-- **Login** (`POST /api/auth/login`, body `{ username, password }`):
-  - Look up user; `verifyPassword(hash, password)`; on fail → 401 generic "Invalid credentials".
-  - `setUserSession` on success.
-- **Logout** (`POST /api/auth/logout`): `clearUserSession`.
-- **Session** (`server/middleware/01.session.ts`): read sealed session, populate `event.context.user = { id, username }`. `server/utils/auth.ts` `requireUser(event)` throws 401 when absent; all question/attempt routes call it and scope every query by `user.id`.
-- **Client protection**: Nuxt route middleware redirects unauthed users to `/login`.
-- **Client 401 handling**: any API call returning 401 clears the local session and redirects to `/login?expired=1`, which shows "Your session expired — please log in again." (the prototype's login notice, wired to the real middleware redirect).
-- Cookies: HTTP-only, Secure (prod), SameSite=Lax; sealed with `NUXT_SESSION_PASSWORD`.
+Everything else (rename, recolor, reorder, add, turn "required" on, single → multiple) applies
+directly. Deleting a scenario requires its name and removes its questions and attempts.
 
-### CRUD Endpoints (`server/api/questions/*`)
+### Authentication
 
-Every route calls `requireUser` and scopes by `user.id`. All bodies validated with zod using `shared/enums.ts`.
+- `POST /api/auth/register` (username 3–32 of `A-Za-z0-9_-`, password at least 8; 409 when taken),
+  `POST /api/auth/login` (401 "Invalid credentials"), `POST /api/auth/logout`.
+- The session middleware sets `event.context.user`; every other route calls `requireUser`.
+- Everything is scoped to the user; anything owned by someone else answers 404.
+- The client sends unauthenticated visitors to `/login?expired=1`, as does any 401.
 
-- `GET /api/questions` — the content-section fetch. Query params (all optional, AND-combined):
-  - Filters (see Content Section): `difficulty[]`, `importance[]`, `category[]` — each accepts **multiple values simultaneously** (OR-combined within the filter, AND-combined with the other filters; omitted/empty array = inactive) — plus `nbd` (all|true|false), `mastered` (all|true|false), `amountOp` (gt|lt|eq) + `amountValue` (int), `recentlyFailed` (bool).
-  - Sort: `sortKey` (difficulty|importance|pct|amount) + `sortDir` (asc|desc). Default `created_at asc`.
-  - Response: array of `{ id, question, answer_summary, difficulty, importance, category, link, mastered, createdAt, updatedAt, stats: { attemptCount, correctCount, trackRecordPct, lastAnsweredAt, lastCorrect } }`.
-  - Implementation: build the per-question stats subquery, then apply filters (enums via `IN`; `amountOp` via `HAVING`/subquery on `attemptCount`; `nbd` true → `attemptCount IS 0`, false → `> 0`; `mastered` true→1/false→0; `recentlyFailed` → `lastCorrect = 0 AND attemptCount > 0`), then `ORDER BY` (difficulty/importance mapped to int via `CASE`; pct/amount use the computed stats; NULL pct sorts as the lowest value) with `created_at, id` tiebreak.
-- `GET /api/questions/[id]` — full question plus attempts history ordered `answered_at DESC` (for detail page + chronological track record).
-- `POST /api/questions` — body `{ question, answer_summary, difficulty, importance, category, link? }`; `mastered` defaults 0; sets `user_id`; returns created row.
-- `PATCH /api/questions/[id]` — body subset-allowing `{ question?, answer_summary?, difficulty?, importance?, category?, link?, mastered? }`; updates `updated_at`; returns updated row. This route powers the reversible mastered toggle.
-- `DELETE /api/questions/[id]` — cascade deletes `attempts` (FK cascade); returns 204.
-- `GET /api/questions/ids` — returns `[{ id }]` for the user's questions only (drives standalone random shuffle; minimal payload).
-- `POST /api/attempts` — body `{ questionId, correct (0|1) }`; verify ownership; insert `attempts { user_id, question_id, correct, answered_at: Date.now() }`; return refreshed stats for that question (so the UI can update track record immediately).
+### API
 
-### Content Section (`/content`, component `QuestionTable.vue`)
+| Route | Purpose |
+|---|---|
+| `GET /api/scenarios` | List with question and incomplete counts, oldest first |
+| `POST /api/scenarios` | Create (409 on a taken name) |
+| `GET /api/scenarios/[sid]` | Definition, per-option and per-attribute usage, counts |
+| `PUT /api/scenarios/[sid]` | `{ scenario, resolutions }`: replace atomically |
+| `DELETE /api/scenarios/[sid]` | `{ confirmName }` → 204 |
+| `GET /api/scenarios/[sid]/questions` | List with filters and sort |
+| `POST /api/scenarios/[sid]/questions` | `{ question, answer, link?, values }` |
+| `GET /api/scenarios/[sid]/questions/ids` | IDs for random practice |
+| `PATCH /api/scenarios/[sid]/questions/bulk` | `{ questionIds, attributeId, action, optionIds }` |
+| `GET /api/questions/[id]` | Question with attempts, newest first |
+| `PATCH /api/questions/[id]` | Any of `question`, `answer`, `link`, `values`, `mastered` |
+| `DELETE /api/questions/[id]` | 204 |
+| `POST /api/attempts` | `{ questionId, correct }` → the question with new stats |
+| `POST /api/format-answer` | `{ content }` → Markdown formatted by the AI service |
 
-Layout (per prototype): sticky left sidebar `FiltersPanel` (244px) + list column with `SortControl` above `QuestionTable`; per-row checkboxes; a check-all control that selects/unselects all rows in the current filtered+sorted result (not globally), with indeterminate state when partially selected. A selection bar ("N selected", "Follow current sort/order" switch, "Start practice" button) appears only when ≥1 row is selected. Loading: table skeleton on first fetch. Empty: two distinct states — no questions at all ("Add your first question") vs. filters match nothing ("Reset filters"). Responsive: filters collapse behind a "Filters" button (≤960px); the table becomes a card list (≤720px).
+A question on the wire is `{ id, scenarioId, question, answer, link, mastered, created_at,
+updated_at, values, incomplete, stats }`. `values` maps every attribute ID to its chosen option IDs
+in option order. Updating `values` replaces the options of the attributes it names (an empty list
+clears one) and keeps those of the others, so a client that does not know an attribute cannot wipe
+it. The values sent must suit the scenario, and the question as it would then be stored must fill
+every required attribute. Updates without `values` do not revalidate them.
 
-- **Filters (AND-combined):**
-  - `difficulty`, `importance`, `category` — each is a **multi-value filter: any number of its values can be selected simultaneously** (e.g. difficulty `{easy, hard}` + importance `{low, mid}` + category `{JS, React}` all at once). Values within one filter are OR-combined (`difficulty IN (easy, hard)`); filters are AND-combined across each other. Empty selection (no values) = that filter is inactive (all).
-  - `difficulty` — multi-select among {easy, medium, hard}; empty = all.
-  - `importance` — multi-select among {low, mid, high}; empty = all.
-  - `category` — multi-select among {HTML, CSS, JS, API, React} (extensible via `shared/enums.ts`); empty = all.
-  - `nbd` (never been done) — tri-state: all / yes (only `attempt_count = 0`) / no.
-  - `mastered` — tri-state: all / yes (`mastered = 1`) / no (`mastered = 0`).
-  - `track record amount` — operator (`>` / `<` / `=`) + integer value N → `attempt_count op N`.
-  - `recently failed` — include-only toggle: on → only `last_correct = 0 AND attempt_count > 0`.
-- **Sorting (single primary key):**
-  - `difficulty` (easy → medium → hard; reverse if desc) via `CASE`-to-integer.
-  - `importance` (low → mid → high; reverse if desc) via `CASE`.
-  - `track record percentage` (unanswered = NULL, sorts as the lowest value); asc/desc.
-  - `track record amount` (count of answers regardless of correctness; unanswered ⇒ 0); asc/desc.
-  - Stable tiebreak: `created_at asc, id asc`.
-- **Selection + Start Practice:**
-  - Select/unselect-all targets the currently rendered filtered+sorted result set.
-  - Selection is held as an **ordered array of ids matching the current table order**.
-  - If filters/sort change while rows are selected, the selection is **re-anchored** to the new result set (ids no longer visible are dropped) with a toast "Selection adjusted to the current results" (prototype behavior).
-  - "Start practice" + "Follow current sort/order" appear only when ≥1 selected.
-  - On Start: build the queue — if checkbox checked, **copy selection order verbatim**; if unchecked, **Fisher–Yates shuffle the selection**. Write queue + `mode=curated` to the Pinia `practice` store and `sessionStorage`, then navigate to `/practice`.
+Creating and updating a question accept only the fields listed: an unknown one is a 422 and nothing
+is written, so a client of another version cannot save part of its input and report success.
 
-### Question Editor (create/edit modal)
+Bulk actions: **set** and **clear** (optional attributes only) in single mode; **add**, **replace**
+and **remove** in multiple mode. A request naming a foreign question or option, or one that would
+leave a required attribute empty anywhere, is rejected as a whole (422 with `reason` and `count`).
+Only changed questions get a new `updated_at`.
 
-`QuestionEditorModal.vue` — overlay dialog (focus-trapped; Esc or overlay click closes). Opened from Content ("Add question" button, row edit icon) and Detail ("Edit").
+### Filtering and sorting
 
-- Create fields: `question` (textarea, required), `answer_summary` (textarea, required), `difficulty` (segmented easy/medium/hard, default medium), `importance` (segmented low/mid/high, default mid), `category` (single-value chip select, default JS), `link?` (optional URL).
-- The answer field has a **Markdown/Display** segmented toggle: Markdown edits the raw source (textarea); Display renders a read-only, sanitized preview via `app/utils/markdown.ts`. The saved value is always the raw Markdown; the toggle is view-only.
-- Edit mode adds: a `mastered` toggle and a danger zone — "Delete question" opens a confirm dialog warning that the question's practice history (N attempts) is deleted too (cascade).
-- Submit → `POST /api/questions` (create) or `PATCH /api/questions/[id]` (edit); success closes the modal, refreshes the current view, and toasts. Client-side required-field errors inline; server validation/409 errors surface inline too.
-- Delete confirm → `DELETE /api/questions/[id]`; if the current view is that question's detail page, redirect to `/content` after delete.
+Query parameters: repeated `option` and `none` (attribute IDs), `incomplete`, `nbd`, `mastered`,
+`amountOp` (`gt`/`lt`/`eq`) with `amountValue`, `recentlyFailed`, `q`, `sortKey`
+(`attr:<id>`, `pct`, `amount`), `sortDir`.
 
-### Question Detail (`/questions/[id]`)
+- Options of one attribute, "None" included, combine with OR; attributes and other filters with AND.
+- Search requires every word to occur in the question text, ignoring case.
+- Only ordered attributes can be sorted by. Empty values sort last in both directions. `pct` treats
+  never practiced as lowest. Ties keep creation order.
+- IDs that are not in the scenario are ignored.
 
-- Back link → `/content`; question prompt as h1; badge row (difficulty, importance, category); mastered toggle pill (reversible); actions: Edit (editor modal), Delete (confirm dialog), "Open original question →" (external link when present).
-- Answer summary in a labeled callout — rendered as Markdown (read-only, sanitized); always visible on detail (reference view, unlike practice where it's hidden).
-- Track record: summary line (times practiced, correct count, % correct — 1 decimal, color-coded) + chronological history table, **newest first** (matches `answered_at DESC`), each row date+time and ✔/✘. Empty state: "Not practiced yet" + "Practice this question" (starts a single-question curated session).
+### Incomplete questions
 
-### Practice Sessions
+A question is incomplete when a required attribute has no option on it. The content page shows a
+banner with the count and a filter for them, marks the rows, and shows "—" for empty values. The
+editor highlights what is missing and requires it on save. Practice, grading and mastered work as
+usual.
 
-**Shared UI** (`PracticeCard.vue`): mode label ("Practice — N questions selected" / "Random practice"); progress indicator (`n / total` + thin bar); question prompt; a "Mark as mastered" toggle **always visible under the prompt** (resolved in prototype); answer hidden behind a "Show answer" button (reveals `answer_summary`, rendered as Markdown — read-only); after reveal: "Correct" and "Incorrect" buttons (record an attempt via `POST /api/attempts`, then refresh that question's stats in place) plus a note "Only Correct / Incorrect records an attempt. Skipping with Next records nothing."; "Next" button (always enabled); `TrackRecord.vue` compact — a collapsible block with mini stats (practiced, % correct, last result) + last 8 history rows.
+### Track record
 
-**Two entry modes:**
+Computed from `attempts`, never stored: `attemptCount`, `correctCount`, `trackRecordPct` (null
+without attempts), `lastAnsweredAt`, `lastCorrect`. **Never been done** means no attempts;
+**recently failed** means the latest attempt was incorrect.
 
-- **Curated** (`/practice`): queue = the selected subset (ordered or shuffled, per "Follow current sort/order"). The subset contains exactly the filtered+sorted result the user selected.
-- **Standalone random** (`/practice/random`, launched from the always-visible "Random Question" button in `AppHeader`): `GET /api/questions/ids` once → Fisher–Yates shuffle in the Pinia store → walk the queue. "Next (random) question" advances the index.
-- **Empty-bank guard:** random practice with zero questions redirects to `/content` (empty state) instead of starting an empty queue.
+### Screens
 
-**No repeats & end state:** because the queue is a **permutation built once**, each question appears exactly once; advancing an index is the only progression — no dedupe logic needed. When `index === queue.length`, show a "No more questions" screen with a "Practice again" button (reshuffles the same queue and restarts) and a "Return to content" button (links to `/content`).
+| Route | Screen |
+|---|---|
+| `/` | Last opened scenario (cookie `qadb_scenario`), or the only one, otherwise the list |
+| `/login`, `/register` | Auth |
+| `/scenarios` | List; create, edit, delete |
+| `/scenarios/new`, `/scenarios/[sid]/edit` | Scenario editor |
+| `/scenarios/[sid]/content` | Table, filters, sort, selection, bulk editing, question editor |
+| `/scenarios/[sid]/questions/[id]` | Detail with the full track record |
+| `/scenarios/[sid]/practice`, `.../practice/random` | Selected and random practice |
+| `/content`, `/practice`, `/practice/random` | Old addresses: redirect to `/` |
+| `/questions/[id]` | Old address: redirects to the question in its scenario, or the 404 page |
 
-**Persistence:** the Pinia `practice` store mirrors `{ mode, queue, index }` to `sessionStorage` (key `qadb:practice`), so a reload within the tab resumes at the current index; closing the tab ends the session (acceptable; ephemeral by design).
+Columns, filters, sort choices, editor fields, badges and practice metadata are generated from the
+scenario's attributes, in their order. The header has a scenario switcher; Random Question applies to
+the current scenario and is hidden outside one.
 
-**`Next` button:** disabled until an answer (correct/incorrect) is recorded for the current question? — **Design decision:** answer is optional to advance; user may skip. "Next" is always enabled (skipping records nothing and does not insert an attempt). Only "Correct"/"Incorrect" write an attempt.
+- **Content:** a selection follows the filtered and sorted result and is trimmed when it changes
+  (with a toast). Selected rows can be practiced, in table order or shuffled, or edited in bulk. On
+  narrow screens (960px, 720px) filters collapse and the table becomes cards.
+- **Editor:** a segmented control for single mode with up to 4 options, otherwise chips. Answers are
+  Markdown with a sanitized preview and an AI "Format" button. On opening it reads the question and
+  then the scenario again (falling back to the page's definition if that fails), and only the latest
+  opening may fill the form. It saves every attribute it knows, `[]` when cleared, and never drops a
+  chosen option merely because its definition does not list it.
 
-**Mastered in practice:** a "Mark as mastered" toggle appears **always under the prompt** (resolved in prototype; available whether or not the answer is revealed). Toggling calls `PATCH /api/questions/[id] { mastered }`. Reversible from the question detail page (`/questions/[id]`) — the detail page shows the same toggle plus full chronological track record.
+### Practice sessions
 
-### Track Record Semantics (canonical definitions used by every filter/sort/UI)
+The Pinia store holds `{ mode, queue, index, scenarioId }`, mirrored to `sessionStorage`
+(`qadb:practice`), so a reload resumes. A session of another scenario is not resumed. The queue is
+built once, so no question repeats; the end screen offers to reshuffle and start again. Only
+Correct and Incorrect record an attempt; Next records nothing. Metadata stays blurred until clicked.
+Questions deleted meanwhile are dropped from the queue.
 
-- `attempt_count` = `COUNT(attempts)` for the question.
-- `correct_count` = `SUM(correct)`.
-- `track_record_pct` = `correct_count * 100 / attempt_count` (NULL when `attempt_count = 0`; client renders "—"; sort treats NULL as the lowest value).
-- `last_correct` = `correct` of the most recent attempt by `answered_at` (NULL when none).
-- **NBD** ⇔ `attempt_count = 0`.
-- **Recently failed** ⇔ `last_correct = 0 AND attempt_count > 0`.
-- Track-record display under each question: `attempt_count` (times practiced), `track_record_pct` (1 decimal, formatted client-side), and chronological list `{ answered_at (date+time), correct (✔/✘) }`.
-- Each attempt stores `answered_at` as unix ms; the client formats to local date/time.
+### AI formatting
 
-### Mastered Flag
+`/api/format-answer` calls the chat completions endpoint in `runtimeConfig.opencodeUrl`
+(overridable with `NUXT_OPENCODE_URL`) with the key from `NUXT_OPENCODE_API_KEY` or
+`OPENCODE_API_KEY`. It asks for formatting only, with no change of wording. 503 without a key, 502
+when the service fails or returns nothing.
 
-- `questions.mastered` integer 0/1, default 0.
-- Setting available: after answering in practice (toggle under the question), and reversibly on the detail page.
-- Filtered by the `mastered` tri-state filter; intended to let the user filter mastered questions out of future sessions (user applies the filter at practice/selection time).
+### Configuration and deployment
 
-### Enums / Shared Constants (`shared/enums.ts`)
+Server-only variables: `NUXT_TURSO_URL`, `TURSO_AUTH_TOKEN` (or `NUXT_TURSO_TOKEN`),
+`NUXT_SESSION_PASSWORD` (32 characters or more), `OPENCODE_API_KEY`. Cookies are HTTP-only,
+SameSite=Lax, and Secure in production.
 
-- `DIFFICULTY = ['easy','medium','hard']` with an explicit **sort order map** `{easy:1, medium:2, hard:3}`.
-- `IMPORTANCE = ['low','mid','high']` with order map `{low:1, mid:2, high:3}`.
-- `CATEGORY = ['HTML','CSS','JS','API','React']` (extensible; no new categories beyond adding a string here and using it — DB column is free text validated by the zod enum, so no migration).
-- Export zod enums `difficultySchema`, `importanceSchema`, `categorySchema`, reused by all server routes and (optionally) the client forms.
+A release that includes a migration needs the owner's explicit approval: back up, migrate, deploy in
+the same window, verify. Rollback is restoring the backup and redeploying the previous version.
 
-### Styling & Theme
+### Testing
 
-- Port the prototype's design tokens verbatim into a CSS variables file: oklch palette with semantic roles (accent, success, danger, mastered, difficulty scale, importance scale, category hues, neutrals), radii, spacing, shadows — including the `[data-theme="dark"]` variant.
-- Theme toggle (light/dark) in `AppHeader`, persisted to `localStorage` (key `qadb_theme`), applied via `data-theme` on `<html>` (set in a layout/plugin to avoid a flash of the wrong theme).
-- Component class names and responsive breakpoints (960/720) map 1:1 from the prototype (`btn`, `badge`, `chip`, `seg`, `switch`, `checkbox`, `input`, `modal`, `toast`, `empty`, `skeleton`, `qtable`, `card-list`).
-- Markdown rendering: `app/utils/markdown.ts` exposes `renderMarkdown(src)` (`markdown-it` with `html: true` + `isomorphic-dompurify` sanitization, safe for `v-html` on both SSR and client). Markdown typography comes from the global `.md` content class in `tokens.css` (no scoped styles).
+| Layer | Tool | Covers |
+|---|---|---|
+| Unit | Vitest | Shared rules, practice store, utilities, password hashing |
+| API | Vitest on a throwaway `sqld` | Every route, ownership, filtering, sorting, cascades, database scripts |
+| End-to-end | Playwright | Every user flow, with a stubbed AI service |
 
-### Deployment (Vercel)
+Server, shared, utility and store code must keep at least 90% line coverage. `tests/flows/` holds
+page-driving steps without assertions, reusable by recording scripts. End-to-end runs use their own
+ports and a fresh database, and refuse a database that is not local.
 
-- `nuxt.config.ts` — no special preset needed; Nitro auto-detects Vercel when deployed via the Vercel dashboard/Git integration. `vercel build` runs `nuxt build`.
-- Environment variables (Vercel project → Settings → Environment Variables, all server-side): `NUXT_TURSO_URL` (or split url/token), `TURSO_AUTH_TOKEN`, `NUXT_SESSION_PASSWORD` (≥32-char random; `openssl rand -base64 32`). Map these in `runtimeConfig`.
-- First deploy creates the random `<project>.vercel.app` domain; HTTPS automatic.
-- Onboard Turso first (`turso db create` + token), run `drizzle-kit push` against the Turso DB once to provision schema, then deploy.
+### Visual design
 
-### Tech-Decision Rationale (learning value + not overly complex)
-
-- **Nuxt 3 + Vue 3** — explore Vue (frequent in job listings, per the user); single full-stack deploy unit; Vue SFC templates translate the delivered interactive prototype (`qadb-prototype.html`) with minimal friction.
-- **Turso (libSQL)** — realistic relational schema with a managed edge DB; SQLite familiarity but networked; avoids provisioning Postgres for a single-user app while still a credible resume item.
-- **Drizzle ORM** — type-safe SQL builder with schema-as-code and migrations; lighter than Prisma for serverless/libSQL and strong resume signal.
-- **Custom auth** — implementing username/password register/login/logout + sealed sessions + argon2id hashing is direct full-stack learning value the user asked for; `nuxt-auth-utils` does the session plumbing without hiding the auth flow's core.
-- **Pinia** — the idiomatic Nuxt state layer; minimal use here (practice queue) keeps complexity low.
-- **Vercel** — free, one-click Nuxt, auto HTTPS, zero‑ops; meets the "no cost" hard requirement with a mainstream deploy story.
-
-### Resolved UI Decisions (settled by the prototype — the implementation ports these)
-
-- Layouts, density, breakpoints, accessibility specifics (focus trap in modals, aria labels, visible focus), and all copy — defined in `qadb-prototype.html`.
-- Track-record list: table form (full on detail; compact collapsible block in practice) — settled.
-- Filters: sticky left sidebar on desktop; collapsible "Filters" button on tablet; table → card list ≤720px — settled.
-- Theme: light + dark variants with a header toggle, persisted — settled.
-- Create/edit: modal editor; delete behind a confirm dialog with cascade warning — settled.
-- Loading: table skeleton; spinner inside submit buttons; toasts for transient feedback — settled.
-
-Still deferred (not in v1): a scope picker for the "Random Question" button (defaults to the full pool) and multi-column sorting (single primary key).
-
-### Implementation Phases
-
-1. **Scaffold + data + auth**: Nuxt app; Turso/Drizzle schema + migrations; `shared/enums.ts`; register/login/logout routes; session middleware; route guards; runtimeConfig env wiring.
-2. **Design system + shell**: port tokens + `ui/` primitives; `AppHeader`; `Login`/`Register` pages — real API replaces the prototype's demo login (drop the demo hint).
-3. **Content**: `FiltersPanel`, `SortControl`, `QuestionTable` (selection bar, re-anchoring, indeterminate check-all, empty states, skeleton, mobile card list); `GET /api/questions` filter/sort implementation.
-4. **Editor + Detail**: `QuestionEditorModal` (create/edit/delete); question detail with newest-first track record; `GET/POST/PATCH/DELETE /api/questions/*`.
-5. **Practice**: Pinia store + sessionStorage persistence; `PracticeCard` + `TrackRecord`; curated and random flows; end panel; empty-bank guard; `POST /api/attempts`.
-
-Prototype gaps to fix during implementation (from prototype review):
-1. Fake auth → real API; client 401 → clear session, redirect `/login?expired=1`.
-2. Detail history renders **newest-first once** — the prototype duplicates the newest row (bug, do not port).
-3. Editor needs inline server-error handling (the prototype cannot fail on save).
-4. Random practice on an empty bank redirects to `/content` instead of showing the end panel.
-5. Drop prototype artifacts: demo-hint credentials, fake "created … ago" sub-lines, dead `qadb_expired`/no-op `open-link` code.
+Design tokens (oklch, light and dark) in `app/assets/tokens.css`, ported from the prototype
+`qadb-prototype.html`, which remains the reference for look and feel. The theme is stored in
+`localStorage` (`qadb_theme`). Markdown is rendered with `markdown-it` and sanitized with
+`isomorphic-dompurify`.

@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import type { AttributeValues, Scenario } from '#shared/scenario/types'
+import { defaultValues, missingAttributeIds, orderedOptionIds } from '#shared/scenario/values'
 import type { QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY, CATEGORY_COLOR, DIFFICULTY, DIFFICULTY_LABEL, IMPORTANCE, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { renderMarkdown } from '~/utils/markdown'
 
-const props = defineProps<{ open: boolean; questionId: string | null }>()
+const props = defineProps<{
+  open: boolean
+  questionId: string | null
+  /** Where the question belongs; its attributes are the editor's fields. */
+  scenario: Scenario | null | undefined
+}>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved'): void
@@ -16,110 +22,184 @@ const { toast } = useToast()
 const question = ref('')
 const answer = ref('')
 const answerMode = ref<'markdown' | 'display'>('markdown')
-const difficulty = ref('medium')
-const importance = ref('mid')
-const categories = ref<string[]>(['JS'])
+const values = ref<AttributeValues>({})
 const link = ref('')
 const mastered = ref(false)
 const saving = ref(false)
 const formatting = ref(false)
 const loading = ref(false)
 const serverError = ref('')
-const fieldErrors = reactive({ question: '', answer_summary: '', link: '' })
-const initial = reactive({ question: '', answer: '', link: '' })
+const fieldErrors = reactive({ question: '', answer: '', link: '' })
+/** Error messages by attribute id. */
+const valueErrors = ref<Record<string, string>>({})
+const initial = reactive({ question: '', answer: '', link: '', values: '' })
 
 const isEdit = computed(() => !!props.questionId)
 const title = computed(() => (isEdit.value ? 'Edit question' : 'Add question'))
+/** The definition the open editor works with, read again on opening: the page's may be out of date. */
+const definition = shallowRef<Scenario | null>(null)
+const attributes = computed(() => definition.value?.attributes ?? [])
+
+/** An entry for every attribute the editor knows, with everything chosen for it. */
+function normalized(from: AttributeValues): AttributeValues {
+  return Object.fromEntries(
+    attributes.value.map((attribute) => [attribute.id, orderedOptionIds(attribute, from[attribute.id] ?? [])]),
+  )
+}
+
 const hasUnsavedChanges = computed(
   () =>
     question.value.trim() !== initial.question ||
     answer.value.trim() !== initial.answer ||
-    link.value.trim() !== initial.link,
+    link.value.trim() !== initial.link ||
+    JSON.stringify(normalized(values.value)) !== initial.values,
 )
 
-const diffOptions = DIFFICULTY.map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
-const impOptions = IMPORTANCE.map((v) => ({ value: v, label: IMPORTANCE_LABEL[v] }))
 const answerModeOptions = [
   { value: 'markdown', label: 'Markdown' },
   { value: 'display', label: 'Display' },
 ]
 
+/** What is in the form now counts as unchanged. */
+function markUnchanged() {
+  initial.question = question.value.trim()
+  initial.answer = answer.value.trim()
+  initial.link = link.value.trim()
+  initial.values = JSON.stringify(normalized(values.value))
+}
+
+function requiredMessages(scenario: Scenario, chosen: AttributeValues) {
+  const missing = missingAttributeIds(scenario, chosen)
+  return Object.fromEntries(
+    scenario.attributes.filter((a) => missing.includes(a.id)).map((a) => [a.id, `${a.name} is required`]),
+  )
+}
+
+function setValue(attributeId: string, optionIds: string[]) {
+  values.value = { ...values.value, [attributeId]: optionIds }
+  const { [attributeId]: _, ...others } = valueErrors.value
+  valueErrors.value = others
+}
+
 function reset() {
   question.value = ''
   answer.value = ''
   answerMode.value = 'markdown'
-  difficulty.value = 'medium'
-  importance.value = 'mid'
-  categories.value = ['JS']
+  values.value = {}
   link.value = ''
   mastered.value = false
   saving.value = false
   loading.value = false
   serverError.value = ''
   fieldErrors.question = ''
-  fieldErrors.answer_summary = ''
+  fieldErrors.answer = ''
   fieldErrors.link = ''
+  valueErrors.value = {}
+}
+
+/** Counts the openings and closings: only the load of the current opening may fill the form. */
+let latestLoad = 0
+onBeforeUnmount(() => latestLoad++)
+
+/** Reads the question being edited, if any, and then the scenario, and fills the form from them. */
+async function load(request: number) {
+  let stored: QuestionWithStats | undefined
+  if (props.questionId) {
+    try {
+      stored = await api<QuestionWithStats>(`/api/questions/${props.questionId}`)
+    } catch {
+      if (request === latestLoad) serverError.value = 'Could not load this question.'
+    }
+  }
+  if (request !== latestLoad) return
+  // After the question, so that the definition knows everything the question holds.
+  if (props.scenario) {
+    let fresh = props.scenario
+    try {
+      fresh = await api<Scenario>(`/api/scenarios/${encodeURIComponent(fresh.id)}`)
+    } catch {
+      // The page's definition will do: saving keeps whatever it does not know.
+    }
+    if (request !== latestLoad) return
+    definition.value = fresh
+  }
+
+  if (stored) {
+    question.value = stored.question
+    answer.value = stored.answer
+    values.value = normalized(stored.values)
+    link.value = stored.link ?? ''
+    mastered.value = stored.mastered === 1
+    if (definition.value) valueErrors.value = requiredMessages(definition.value, values.value)
+  } else if (!props.questionId && definition.value) {
+    // Only a new question starts with the defaults: a stored one shows what it has.
+    values.value = normalized(defaultValues(definition.value))
+  }
+  markUnchanged()
+  loading.value = false
+  await nextTick()
+  focusQuestion()
+}
+
+const modalBody = ref<HTMLElement | null>(null)
+
+/** The fields were not there when the dialog opened: take the focus to them, unless it was moved. */
+function focusQuestion() {
+  const dialog = modalBody.value?.closest('.modal')
+  const at = document.activeElement
+  if (at === document.body || at === dialog || at === dialog?.querySelector('[aria-label="Close"]')) {
+    modalBody.value?.querySelector<HTMLElement>('textarea')?.focus()
+  }
 }
 
 watch(
   () => props.open,
-  async (open) => {
+  (open) => {
+    const request = ++latestLoad
     if (!open) return
     reset()
-    initial.question = ''
-    initial.answer = ''
-    initial.link = ''
-    if (props.questionId) {
-      loading.value = true
-      try {
-        const q = await api<QuestionWithStats>(`/api/questions/${props.questionId}`)
-        question.value = q.question
-        answer.value = q.answer_summary
-        difficulty.value = q.difficulty
-        importance.value = q.importance
-        categories.value = q.category.length ? q.category : ['JS']
-        link.value = q.link ?? ''
-        mastered.value = q.mastered === 1
-        initial.question = question.value.trim()
-        initial.answer = answer.value.trim()
-        initial.link = link.value.trim()
-      } catch {
-        serverError.value = 'Could not load this question.'
-      } finally {
-        loading.value = false
-      }
-    }
+    definition.value = props.scenario ?? null
+    markUnchanged()
+    loading.value = true
+    load(request)
   },
 )
 
 function mapServerError(e: { statusCode?: number; data?: unknown }) {
-  if (e?.statusCode === 422 && Array.isArray(e.data)) {
-    for (const issue of e.data as { path?: unknown[]; message?: string }[]) {
-      const field = issue.path?.[0]
+  // The response body wraps the issues in `data`.
+  const body = e?.data as { data?: unknown } | undefined
+  const issues = Array.isArray(body) ? body : body?.data
+  if (e?.statusCode === 422 && Array.isArray(issues)) {
+    let shown = false
+    for (const issue of issues as { path?: unknown[]; message?: string }[]) {
+      const [field, attributeId] = issue.path ?? []
       if (field === 'question') fieldErrors.question = 'The question is required.'
-      else if (field === 'answer_summary') fieldErrors.answer_summary = 'An answer summary is required.'
+      else if (field === 'answer') fieldErrors.answer = 'An answer is required.'
       else if (field === 'link') fieldErrors.link = 'Enter a valid URL.'
+      else if (field === 'values' && attributes.value.some((a) => a.id === attributeId)) {
+        valueErrors.value = { ...valueErrors.value, [attributeId as string]: issue.message ?? 'Check this value.' }
+      } else continue
+      shown = true
     }
-    if (!fieldErrors.question && !fieldErrors.answer_summary && !fieldErrors.link) {
-      serverError.value = 'Please check your input.'
-    }
+    if (!shown) serverError.value = 'Please check your input.'
   } else {
     serverError.value = 'Something went wrong. Please try again.'
   }
 }
 
 async function save() {
+  const scenario = definition.value
+  if (!scenario || loading.value) return
   fieldErrors.question = question.value.trim() ? '' : 'The question is required.'
-  fieldErrors.answer_summary = answer.value.trim() ? '' : 'An answer summary is required.'
-  if (fieldErrors.question || fieldErrors.answer_summary) return
+  fieldErrors.answer = answer.value.trim() ? '' : 'An answer is required.'
+  const chosen = normalized(values.value)
+  valueErrors.value = requiredMessages(scenario, chosen)
+  if (fieldErrors.question || fieldErrors.answer || Object.keys(valueErrors.value).length) return
 
   const body = {
     question: question.value.trim(),
-    answer_summary: answer.value.trim(),
-    difficulty: difficulty.value,
-    importance: importance.value,
-    category: categories.value,
-    link: link.value.trim() || undefined,
+    answer: answer.value.trim(),
+    values: chosen,
   }
 
   saving.value = true
@@ -128,10 +208,14 @@ async function save() {
     if (isEdit.value) {
       await api(`/api/questions/${props.questionId}`, {
         method: 'PATCH',
-        body: { ...body, mastered: mastered.value ? 1 : 0 },
+        // An emptied link is sent as such, so that it is removed.
+        body: { ...body, link: link.value.trim(), mastered: mastered.value ? 1 : 0 },
       })
     } else {
-      await api('/api/questions', { method: 'POST', body })
+      await api(`/api/scenarios/${encodeURIComponent(scenario.id)}/questions`, {
+        method: 'POST',
+        body: { ...body, link: link.value.trim() || undefined },
+      })
     }
     emit('saved')
     emit('close')
@@ -154,13 +238,6 @@ function discard() {
   emit('close')
 }
 
-watch(confirmDiscardOpen, (open) => {
-  if (open) return
-  nextTick(() => {
-    document.querySelector<HTMLElement>('.overlay')?.querySelector<HTMLElement>('input, textarea, select, button')?.focus()
-  })
-})
-
 async function formatWithAi() {
   if (!answer.value.trim() || formatting.value) return
   formatting.value = true
@@ -175,14 +252,6 @@ async function formatWithAi() {
     toast('Could not format. Try again.')
   } finally {
     formatting.value = false
-  }
-}
-
-function toggleCategory(c: Category) {
-  if (categories.value.includes(c)) {
-    if (categories.value.length > 1) categories.value = categories.value.filter((v) => v !== c)
-  } else {
-    categories.value = [...categories.value, c]
   }
 }
 
@@ -201,7 +270,7 @@ function requestDelete() {
     </div>
 
     <form novalidate @submit.prevent="save">
-      <div class="modal-body">
+      <div ref="modalBody" class="modal-body">
         <div v-if="serverError" class="alert alert-error" style="margin-bottom: 14px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
           <span>{{ serverError }}</span>
@@ -213,10 +282,10 @@ function requestDelete() {
         </div>
 
         <template v-else>
-          <Input v-model="question" label="Question" type="textarea" placeholder="The interview prompt" :error="fieldErrors.question" />
+          <Input v-model="question" label="Question" type="textarea" placeholder="What do you want to be asked?" :error="fieldErrors.question" />
           <div class="answer-edit">
             <div class="answer-field-head">
-              <label>Answer summary</label>
+              <label>Answer</label>
               <div class="answer-actions">
                 <Btn
                   v-if="answerMode === 'markdown'"
@@ -248,46 +317,30 @@ function requestDelete() {
               v-show="answerMode === 'markdown'"
               v-model="answer"
               type="textarea"
-              placeholder="What you'd say out loud in the interview — short and spoken-style. **Markdown** supported."
-              :error="fieldErrors.answer_summary"
+              aria-label="Answer"
+              placeholder="Short, as you would say it. **Markdown** supported."
+              :error="fieldErrors.answer"
             />
-            <div v-if="answerMode === 'display'" class="answer-preview md" :class="{ invalid: !!fieldErrors.answer_summary }" v-html="renderMarkdown(answer)" />
-            <div v-if="answerMode === 'display' && fieldErrors.answer_summary" class="field-err">
-              {{ fieldErrors.answer_summary }}
+            <div v-if="answerMode === 'display'" class="answer-preview md" :class="{ invalid: !!fieldErrors.answer }" v-html="renderMarkdown(answer)" />
+            <div v-if="answerMode === 'display' && fieldErrors.answer" class="field-err">
+              {{ fieldErrors.answer }}
             </div>
           </div>
 
-          <div class="field">
-            <label>Difficulty</label>
-            <Seg v-model="difficulty" :options="diffOptions" />
-          </div>
-
-          <div class="field">
-            <label>Importance</label>
-            <Seg v-model="importance" :options="impOptions" />
-          </div>
-
-          <div class="field">
-            <label>Category</label>
-            <div class="chip-group">
-              <Chip
-                v-for="c in CATEGORY"
-                :key="c"
-                :active="categories.includes(c)"
-                :color="CATEGORY_COLOR[c]"
-                :disabled="categories.length === 1 && categories.includes(c)"
-                @click="toggleCategory(c)"
-              >
-                {{ c }}
-              </Chip>
-            </div>
-          </div>
+          <AttributeField
+            v-for="attribute in attributes"
+            :key="attribute.id"
+            :attribute="attribute"
+            :model-value="values[attribute.id] ?? []"
+            :error="valueErrors[attribute.id]"
+            @update:model-value="setValue(attribute.id, $event)"
+          />
 
           <Input
             v-model="link"
-            label="Link to original GreatFrontend question"
+            label="Link"
             type="url"
-            placeholder="https://www.greatfrontend.com/questions/…"
+            placeholder="https://example.com/…"
             :error="fieldErrors.link"
           />
 
@@ -305,7 +358,7 @@ function requestDelete() {
 
       <div class="modal-foot">
         <Btn variant="secondary" @click="attemptClose">Cancel</Btn>
-        <Btn type="submit" :loading="saving">Save</Btn>
+        <Btn type="submit" :loading="saving" :disabled="loading">Save</Btn>
       </div>
     </form>
   </Modal>

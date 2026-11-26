@@ -18,8 +18,10 @@ const config = useRuntimeConfig()
 const client = createClient({
   url: config.tursoUrl,
   // Nuxt only auto-maps `NUXT_`-prefixed env vars into runtimeConfig, so
-  // `TURSO_AUTH_TOKEN` (the Turso/drizzle-kit convention) needs an explicit read.
+  // `TURSO_AUTH_TOKEN` (the Turso convention) needs an explicit read.
   authToken: config.tursoToken || process.env.TURSO_AUTH_TOKEN || undefined,
 })
 
 export const db = drizzle(client, { schema })
+
+export type Db = typeof db

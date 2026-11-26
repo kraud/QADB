@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
 
   let formatted: string | undefined
   try {
-    const res: unknown = await $fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+    const res: unknown = await $fetch(config.opencodeUrl, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

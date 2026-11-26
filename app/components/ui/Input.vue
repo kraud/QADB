@@ -5,13 +5,14 @@ import { useId } from 'vue'
 const props = withDefaults(
   defineProps<{
     label?: string
-    type?: 'text' | 'password' | 'textarea' | 'select' | 'number' | 'url' | 'email'
+    /** Names the control when its label is drawn elsewhere. */
+    ariaLabel?: string
+    type?: 'text' | 'password' | 'textarea' | 'number' | 'url' | 'email'
     modelValue?: string
     placeholder?: string
     helper?: string
     error?: string
     required?: boolean
-    options?: { value: string; label: string }[]
     name?: string
     autocomplete?: string
     min?: string | number
@@ -38,15 +39,13 @@ function onInput(e: Event) {
       v-if="type === 'textarea'"
       :id="id"
       class="textarea"
+      :aria-label="ariaLabel"
       :value="modelValue"
       :placeholder="placeholder"
       :required="required"
       @input="onInput"
     />
 
-    <select v-else-if="type === 'select'" :id="id" class="select" :value="modelValue" @change="onInput">
-      <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
-    </select>
 
     <div v-else-if="toggleable && type === 'password'" class="input-wrap">
       <input
@@ -75,6 +74,7 @@ function onInput(e: Event) {
       :id="id"
       class="input"
       :type="type"
+      :aria-label="ariaLabel"
       :value="modelValue"
       :placeholder="placeholder"
       :required="required"

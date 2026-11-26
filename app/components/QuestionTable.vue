@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { Scenario } from '#shared/scenario/types'
 import type { QuestionWithStats } from '#shared/types/qadb'
-import { CATEGORY_COLOR, DIFFICULTY_COLOR, DIFFICULTY_LABEL, IMPORTANCE_COLOR, IMPORTANCE_LABEL, type Category } from '#shared/enums'
 import { rel } from '~/utils/format'
 
-const props = defineProps<{ questions: QuestionWithStats[]; selection: string[] }>()
+const props = defineProps<{ scenario: Scenario; questions: QuestionWithStats[]; selection: string[] }>()
 const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'toggle', id: string): void
@@ -40,9 +40,7 @@ function last(q: QuestionWithStats): string {
             />
           </th>
           <th class="col-q">Question ({{ questions.length }})</th>
-          <th>Difficulty</th>
-          <th>Importance</th>
-          <th>Category</th>
+          <th v-for="attribute in scenario.attributes" :key="attribute.id">{{ attribute.name }}</th>
           <th class="col-num">Practiced</th>
           <th class="col-num">% correct</th>
           <th class="col-num">Last answered</th>
@@ -65,10 +63,13 @@ function last(q: QuestionWithStats): string {
               @update:model-value="emit('toggle', q.id)"
             />
           </td>
-          <td class="col-q"><span class="q-cell">{{ q.question }}</span></td>
-          <td><Badge tone="diff" :color="DIFFICULTY_COLOR[q.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[q.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge></td>
-          <td><Badge tone="imp" :color="IMPORTANCE_COLOR[q.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[q.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge></td>
-          <td><span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in q.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span></td>
+          <td class="col-q">
+            <span class="q-cell">{{ q.question }}</span>
+            <Badge v-if="q.incomplete" tone="incomplete" class="q-flag">Incomplete</Badge>
+          </td>
+          <td v-for="attribute in scenario.attributes" :key="attribute.id">
+            <AttributeBadges :scenario="{ attributes: [attribute] }" :values="q.values" />
+          </td>
           <td class="col-num">{{ q.stats.attemptCount }}</td>
           <td class="col-num">{{ pct(q) }}</td>
           <td class="col-num">{{ last(q) }}</td>
@@ -77,7 +78,7 @@ function last(q: QuestionWithStats): string {
             <span v-else class="blank">—</span>
           </td>
           <td class="col-act">
-            <a v-if="q.link" class="link-ic" :href="q.link" target="_blank" rel="noopener" aria-label="Open original question" @click.stop>
+            <a v-if="q.link" class="link-ic" :href="q.link" target="_blank" rel="noopener" aria-label="Open link" @click.stop>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2" /><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2" /></svg>
             </a>
             <span v-else class="link-ic blank" style="cursor: default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="opacity: .4"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2" /><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2" /></svg></span>
@@ -114,9 +115,8 @@ function last(q: QuestionWithStats): string {
         <div class="q">{{ q.question }}</div>
       </div>
       <div class="meta-row">
-        <Badge tone="diff" :color="DIFFICULTY_COLOR[q.difficulty as keyof typeof DIFFICULTY_COLOR]">{{ DIFFICULTY_LABEL[q.difficulty as keyof typeof DIFFICULTY_LABEL] }}</Badge>
-        <Badge tone="imp" :color="IMPORTANCE_COLOR[q.importance as keyof typeof IMPORTANCE_COLOR]">{{ IMPORTANCE_LABEL[q.importance as keyof typeof IMPORTANCE_LABEL] }}</Badge>
-        <span style="display:flex; gap:4px; flex-wrap:wrap"><Badge v-for="c in q.category" :key="c" tone="cat" :color="CATEGORY_COLOR[c as Category]">{{ c }}</Badge></span>
+        <Badge v-if="q.incomplete" tone="incomplete">Incomplete</Badge>
+        <AttributeBadges v-if="scenario.attributes.length" :scenario="scenario" :values="q.values" />
         <Badge v-if="q.mastered" tone="mastered"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l6 6L20 6" /></svg>Done</Badge>
       </div>
       <div class="stats">
