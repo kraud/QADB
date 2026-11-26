@@ -7,7 +7,7 @@ import { attributes, options, questionOptions, questions } from '../../db/schema
  */
 // The outer columns are spelled `${questions}.x`: drizzle drops the table name from a column
 // reference in single-table queries, and a bare `id` would bind to a table inside the subquery.
-export const isIncomplete = sql<boolean>`exists (
+export const isIncomplete = sql`exists (
   select 1 from ${attributes} as required_attribute
   where required_attribute.scenario_id = ${questions}.scenario_id
     and required_attribute.required = 1
@@ -17,4 +17,4 @@ export const isIncomplete = sql<boolean>`exists (
       where chosen.question_id = ${questions}.id
         and chosen_option.attribute_id = required_attribute.id
     )
-)`
+)`.mapWith(Boolean)

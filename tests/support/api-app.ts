@@ -30,6 +30,13 @@ const ROUTES: [RouterMethod, string, () => Promise<{ default: EventHandler }>][]
   ['get', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.get')],
   ['put', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.put')],
   ['delete', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.delete')],
+  ['get', '/api/scenarios/:sid/questions', () => import('../../server/api/scenarios/[sid]/questions/index.get')],
+  ['post', '/api/scenarios/:sid/questions', () => import('../../server/api/scenarios/[sid]/questions/index.post')],
+  ['get', '/api/scenarios/:sid/questions/ids', () => import('../../server/api/scenarios/[sid]/questions/ids.get')],
+  ['get', '/api/questions/:id', () => import('../../server/api/questions/[id].get')],
+  ['patch', '/api/questions/:id', () => import('../../server/api/questions/[id].patch')],
+  ['delete', '/api/questions/:id', () => import('../../server/api/questions/[id].delete')],
+  ['post', '/api/attempts', () => import('../../server/api/attempts.post')],
 ]
 
 /** Stands in for the sealed session cookie. */
