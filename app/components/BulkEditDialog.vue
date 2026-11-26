@@ -13,6 +13,8 @@ const props = defineProps<{
   scenario: Scenario
   /** The selected questions, as listed. */
   questions: QuestionWithStats[]
+  /** The list is being read: nothing can be applied until it is. */
+  busy?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'close'): void
@@ -31,8 +33,9 @@ const chosenIds = ref<string[]>([])
 const saving = ref(false)
 const serverError = ref('')
 
-const attribute = computed<Attribute | undefined>(
-  () => props.scenario.attributes.find((a) => a.id === attributeId.value) ?? props.scenario.attributes[0],
+// Neither stands in for a missing choice: what is applied was always chosen, or shown on opening.
+const attribute = computed<Attribute | undefined>(() =>
+  props.scenario.attributes.find((a) => a.id === attributeId.value),
 )
 
 const LABELS: Record<BulkAction, string> = {
@@ -50,8 +53,7 @@ function actionsFor(target: Attribute | undefined): BulkAction[] {
 }
 
 const actions = computed(() => actionsFor(attribute.value))
-// The first action stands until another one the attribute allows is chosen.
-const action = computed(() => actions.value.find((a) => a === chosenAction.value) ?? actions.value[0])
+const action = computed(() => actions.value.find((a) => a === chosenAction.value))
 
 // Only options the attribute still has: the scenario can be read again while the dialog is open.
 const optionIds = computed(() =>
@@ -71,7 +73,7 @@ const count = (n: number) => `${n} question${n === 1 ? '' : 's'}`
 const outcome = computed(() => {
   if (tooMany.value) return { blocked: true, text: `Select at most ${MAX_QUESTIONS} questions to edit them together.` }
   const result = plan.value
-  if (!result) return { blocked: true, text: '' }
+  if (!result) return { blocked: true, text: attribute.value ? 'Choose an action.' : 'Choose an attribute.' }
   if (result.ok) {
     const n = result.changes.length
     return { blocked: !n, text: n ? `${count(n)} will change.` : 'No questions will change.' }
@@ -88,7 +90,7 @@ const outcome = computed(() => {
 
 function chooseAttribute(id: string) {
   attributeId.value = id
-  chosenAction.value = ''
+  chosenAction.value = actionsFor(attribute.value)[0] ?? ''
   chosenIds.value = []
   serverError.value = ''
 }
@@ -117,6 +119,18 @@ watch(
   },
 )
 
+// The scenario read again may have lost the chosen attribute, or the action may no longer suit it.
+// Turning to another one unasked could change what was not meant: it has to be picked again.
+watch(
+  () => props.scenario,
+  () => {
+    if (action.value) return
+    if (!attribute.value) attributeId.value = ''
+    chosenAction.value = ''
+    chosenIds.value = []
+  },
+)
+
 // With nothing selected any more (the list changed underneath) there is nothing to edit.
 watch(
   () => props.open && !saving.value && !props.questions.length,
@@ -128,7 +142,7 @@ watch(
 const body = ref<HTMLElement | null>(null)
 
 async function apply() {
-  if (saving.value || outcome.value.blocked) return
+  if (saving.value || props.busy || outcome.value.blocked) return
   saving.value = true
   serverError.value = ''
   try {
@@ -185,10 +199,11 @@ function close() {
           <select
             :id="`${uid}-attribute`"
             class="select"
-            :value="attribute?.id"
+            :value="attribute?.id ?? ''"
             :disabled="saving"
             @change="chooseAttribute(($event.target as HTMLSelectElement).value)"
           >
+            <option v-if="!attribute" value="" disabled>Choose…</option>
             <option v-for="a in scenario.attributes" :key="a.id" :value="a.id">{{ a.name }}</option>
           </select>
         </div>
@@ -198,15 +213,16 @@ function close() {
           <select
             :id="`${uid}-action`"
             class="select"
-            :value="action"
-            :disabled="saving"
+            :value="action ?? ''"
+            :disabled="saving || !attribute"
             @change="chooseAction(($event.target as HTMLSelectElement).value as BulkAction)"
           >
+            <option v-if="!action" value="" disabled>Choose…</option>
             <option v-for="a in actions" :key="a" :value="a">{{ LABELS[a] }}</option>
           </select>
         </div>
 
-        <div v-if="attribute && action !== 'clear'" class="field" role="group" :aria-labelledby="`${uid}-options`">
+        <div v-if="attribute && action && action !== 'clear'" class="field" role="group" :aria-labelledby="`${uid}-options`">
           <span :id="`${uid}-options`" class="field-label">{{ action === 'set' ? 'Option' : 'Options' }}</span>
           <div class="chip-group">
             <Chip
@@ -227,7 +243,7 @@ function close() {
 
       <div class="modal-foot">
         <Btn variant="secondary" :disabled="saving" @click="close">Cancel</Btn>
-        <Btn type="submit" :disabled="outcome.blocked" :loading="saving">Apply</Btn>
+        <Btn type="submit" :disabled="busy || outcome.blocked" :loading="saving">Apply</Btn>
       </div>
     </form>
   </Modal>

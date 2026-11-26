@@ -28,6 +28,9 @@ const followOrder = ref(true)
 const questions = ref<QuestionWithStats[]>([])
 const loading = ref(true)
 const loadError = ref(false)
+/** A typed search waiting to be sent, and a list request not yet answered. */
+const searchPending = ref(false)
+const fetching = ref(false)
 const hasLoaded = ref(false)
 const mobileFiltersOpen = ref(false)
 
@@ -37,6 +40,9 @@ const editingId = ref<string | null>(null)
 const confirmOpen = ref(false)
 const deletingId = ref<string | null>(null)
 const deletingAttemptCount = ref(0)
+
+/** The rows may not be what the filters ask for, or not what is stored. */
+const listPending = computed(() => searchPending.value || fetching.value)
 
 /** Missing, or someone else's. */
 const notFound = computed(() => scenarioError.value?.statusCode === 404)
@@ -73,6 +79,7 @@ async function fetchQuestions() {
   const request = ++latestRequest
   if (!hasLoaded.value) loading.value = true
   loadError.value = false
+  fetching.value = true
   try {
     const query = buildQuestionQuery(filters, sortKey.value, sortDir.value)
     const data = await api<QuestionWithStats[]>(`/api/scenarios/${encodeURIComponent(sid)}/questions${query}`)
@@ -83,9 +90,12 @@ async function fetchQuestions() {
   } catch (err) {
     if (request !== latestRequest) return
     loadError.value = true
+    // The list is hidden now, and with it what a bulk edit would change.
+    bulkOpen.value = false
     // Deleted since it was opened: reading it again shows the 404 panel.
     if ((err as { statusCode?: number }).statusCode === 404 && scenario.value) refreshScenario()
   }
+  fetching.value = false
   loading.value = false
 }
 
@@ -105,7 +115,11 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 function onSearchInput(e: Event) {
   filters.q = (e.target as HTMLInputElement).value
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(fetchQuestions, 250)
+  searchPending.value = true
+  searchTimer = setTimeout(() => {
+    searchPending.value = false
+    fetchQuestions()
+  }, 250)
 }
 onBeforeUnmount(() => {
   left = true
@@ -113,15 +127,20 @@ onBeforeUnmount(() => {
   clearTimeout(searchTimer)
 })
 
-function resetFilters() {
+function cancelSearch() {
   clearTimeout(searchTimer)
+  searchPending.value = false
+}
+
+function resetFilters() {
+  cancelSearch()
   Object.assign(filters, emptyFilters())
   fetchQuestions()
 }
 
 /** Lists exactly the questions the banner counts: no other filter may hide any of them. */
 function showIncomplete() {
-  clearTimeout(searchTimer)
+  cancelSearch()
   Object.assign(filters, emptyFilters(), { incomplete: true })
   fetchQuestions()
 }
@@ -255,7 +274,15 @@ onMounted(() => {
             <span class="count">{{ selection.length }} selected</span>
             <Switch v-model="followOrder" size="sm" label="Follow current sort/order" />
             <Btn size="sm" @click="startPractice">Start practice</Btn>
-            <Btn v-if="hasAttributes" variant="secondary" size="sm" @click="bulkOpen = true">Edit attributes</Btn>
+            <Btn
+              v-if="hasAttributes"
+              variant="secondary"
+              size="sm"
+              :disabled="listPending || loadError"
+              @click="bulkOpen = true"
+            >
+              Edit attributes
+            </Btn>
           </div>
         </div>
 
@@ -328,6 +355,7 @@ onMounted(() => {
     :open="bulkOpen"
     :scenario="scenario"
     :questions="selectedQuestions"
+    :busy="listPending"
     @close="bulkOpen = false"
     @applied="onBulkApplied"
     @stale="reload"

@@ -26,7 +26,13 @@ import {
   toggleFilterChip,
 } from '../flows/questions'
 import { fetchQuestion, resetUserData, seedQuestions } from '../support/reset'
-import { addAttribute, createFrontendScenario, json, optionValues } from '../support/scenario-fixture'
+import {
+  addAttribute,
+  createFrontendScenario,
+  createScenario,
+  json,
+  optionValues,
+} from '../support/scenario-fixture'
 
 const FIRST = 'First: what is a closure?'
 const SECOND = 'Second: how does flexbox work?'
@@ -60,6 +66,17 @@ function bulkRequests(page: Page) {
 }
 
 const selectedCount = (page: Page, n: number) => page.getByText(`${n} selected`, { exact: true })
+
+const LIST_URL = /\/api\/scenarios\/[^/]+\/questions(\?.*)?$/
+const LOAD_ERROR = "Couldn't load your questions"
+
+/** Takes over the list requests from now on. */
+function routeList(page: Page, handle: (route: Route) => unknown) {
+  return page.route(LIST_URL, (route) => (route.request().method() === 'GET' ? handle(route) : route.fallback()))
+}
+
+const editButton = (page: Page) => page.getByRole('button', { name: 'Edit attributes', exact: true })
+const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search questions' })
 
 test('bulk set fixes all selected; fixed rows leave the filtered selection', async ({ page }) => {
   const ids = await seedQuestions(page.request, scenario, [{ question: FIRST }, { question: SECOND }])
@@ -284,6 +301,179 @@ test('Apply sends one request and the dialog stays while it runs', async ({ page
   await expect(bulkDialog(page)).toHaveCount(0)
   await expect(page.getByText('1 question updated')).toBeVisible()
   expect(held).toHaveLength(2)
+})
+
+test('bulk editing waits for a pending search and list request', async ({ page }) => {
+  await seedQuestions(page.request, scenario, [{ question: FIRST }])
+  await page.clock.install()
+  await openContent(page, scenario.id)
+  await selectAllShown(page)
+  await expect(editButton(page)).toBeEnabled()
+  const held: Route[] = []
+  await routeList(page, (route) => held.push(route))
+  // Time stands still, so the search stays unsent until it is run on.
+  await page.clock.pauseAt(Date.now() + 60_000)
+
+  await searchBox(page).fill('First')
+  await expect(editButton(page)).toBeDisabled()
+  expect(held).toHaveLength(0)
+
+  await page.clock.runFor(300)
+  await expect.poll(() => held.length).toBe(1)
+  await expect(editButton(page)).toBeDisabled()
+
+  await held[0]!.continue()
+  await expect(editButton(page)).toBeEnabled()
+})
+
+test('Apply waits while the list is read again', async ({ page }) => {
+  await seedQuestions(page.request, scenario, [{ question: FIRST }])
+  await openContent(page, scenario.id)
+  await selectAllShown(page)
+  await openBulkEditor(page)
+  await chooseBulkAttribute(page, 'Difficulty')
+  await toggleBulkOption(page, 'Hard')
+  const held: Route[] = []
+  await routeList(page, (route) => held.push(route))
+  await page.route('**/questions/bulk', (route) =>
+    route.fulfill({ status: 422, json: { data: { reason: 'invalid', count: 0 } } }),
+  )
+
+  await applyButton(page).click()
+
+  await expect.poll(() => held.length).toBe(1)
+  await expect(bulkDialog(page).getByRole('button', { name: 'Cancel' })).toBeEnabled() // saving is over
+  await expect(applyButton(page)).toBeDisabled()
+  await held[0]!.continue()
+  await expect(applyButton(page)).toBeEnabled()
+})
+
+test('a list that fails to load closes the dialog and blocks bulk editing', async ({ page }) => {
+  await seedQuestions(page.request, scenario, [{ question: FIRST }])
+  await openContent(page, scenario.id)
+  await selectAllShown(page)
+  const fail = (route: Route) => route.fulfill({ status: 500, json: {} })
+
+  await test.step('after a search', async () => {
+    await routeList(page, fail)
+    await searchBox(page).fill('First')
+    await expect(page.getByRole('heading', { name: LOAD_ERROR })).toBeVisible()
+    await expect(editButton(page)).toBeDisabled()
+    await page.unroute(LIST_URL)
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(editButton(page)).toBeEnabled()
+  })
+
+  await test.step('while the dialog is open', async () => {
+    await openBulkEditor(page)
+    await chooseBulkAttribute(page, 'Difficulty')
+    await toggleBulkOption(page, 'Hard')
+    await routeList(page, fail)
+    await page.route('**/questions/bulk', (route) =>
+      route.fulfill({ status: 422, json: { data: { reason: 'invalid', count: 0 } } }),
+    )
+    await applyButton(page).click()
+    await expect(page.getByRole('heading', { name: LOAD_ERROR })).toBeVisible()
+    await expect(bulkDialog(page)).toHaveCount(0)
+    await expect(editButton(page)).toBeDisabled()
+    await page.unrouteAll()
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(editButton(page)).toBeEnabled()
+    await expect(bulkDialog(page)).toHaveCount(0)
+  })
+
+  await test.step('when reading again after a successful edit', async () => {
+    await openBulkEditor(page)
+    await chooseBulkAttribute(page, 'Difficulty')
+    await toggleBulkOption(page, 'Hard')
+    await routeList(page, fail)
+    await applyButton(page).click()
+    await expect(page.getByText('1 question updated')).toBeVisible()
+    await expect(page.getByRole('heading', { name: LOAD_ERROR })).toBeVisible()
+    await expect(editButton(page)).toBeDisabled()
+  })
+})
+
+/** Two optional attributes, so that "Clear" suits whichever the dialog might turn to. */
+async function openOptionalClear(page: Page) {
+  const optional = (name: string, labels: string[]) => ({
+    name,
+    selectionMode: 'single' as const,
+    ordered: false,
+    required: false,
+    options: labels.map((label) => ({ label, color: 'green' as const, isDefault: false })),
+  })
+  const created = await createScenario(page.request, {
+    name: 'Optional',
+    attributes: [optional('Region', ['North', 'South']), optional('Team', ['Red', 'Blue'])],
+  })
+  const values = optionValues(created, { Region: ['North'], Team: ['Red'] })
+  const question = await json<{ id: string }>(
+    page.request.post(`/api/scenarios/${created.id}/questions`, {
+      data: { question: FIRST, answer: 'An answer.', values },
+    }),
+  )
+  await openContent(page, created.id)
+  await selectAllShown(page)
+  await openBulkEditor(page)
+  await chooseBulkAttribute(page, 'Team')
+  await chooseBulkAction(page, 'Clear')
+  await expect(applyButton(page)).toBeEnabled()
+  return { created, id: question.id, values }
+}
+
+const CHANGED = 'The questions changed since the list was read. Nothing was changed.'
+
+test('a chosen attribute deleted elsewhere must be picked again', async ({ page }) => {
+  const { created, id, values } = await openOptionalClear(page)
+  const sent = bulkRequests(page)
+  const [region, team] = created.attributes
+  await json(
+    page.request.put(`/api/scenarios/${created.id}`, {
+      data: {
+        scenario: { name: created.name, attributes: [region] },
+        resolutions: { removedAttributes: [team!.id] },
+      },
+    }),
+  )
+
+  await applyButton(page).click()
+
+  await expect(bulkAttribute(page).getByRole('option')).toHaveText(['Choose…', 'Region'])
+  await expect(bulkAttribute(page).locator('option:checked')).toHaveText('Choose…')
+  await expect(bulkAction(page)).toBeDisabled()
+  await expect(applyButton(page)).toBeDisabled()
+  await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose an attribute.')
+  await expect(bulkDialog(page).getByRole('alert')).toHaveText(CHANGED)
+  expect(sent).toHaveLength(1)
+  expect((await fetchQuestion(page.request, id)).values[region!.id]).toEqual(values[region!.id])
+
+  await chooseBulkAttribute(page, 'Region')
+  await expect(bulkAction(page).locator('option:checked')).toHaveText('Set')
+  await expect(applyButton(page)).toBeDisabled()
+})
+
+test('an action the attribute no longer allows must be picked again', async ({ page }) => {
+  const { created } = await openOptionalClear(page)
+  const [region, team] = created.attributes
+  await json(
+    page.request.put(`/api/scenarios/${created.id}`, {
+      data: { scenario: { name: created.name, attributes: [region, { ...team, selectionMode: 'multiple' }] } },
+    }),
+  )
+
+  await applyButton(page).click()
+
+  await expect(bulkAction(page).getByRole('option')).toHaveText(['Choose…', 'Add', 'Replace', 'Remove'])
+  await expect(bulkAction(page).locator('option:checked')).toHaveText('Choose…')
+  await expect(bulkAttribute(page).locator('option:checked')).toHaveText('Team')
+  await expect(applyButton(page)).toBeDisabled()
+  await expect(bulkDialog(page).getByRole('status')).toHaveText('Choose an action.')
+  await expect(bulkDialog(page).getByRole('alert')).toHaveText(CHANGED)
+
+  await chooseBulkAction(page, 'Remove')
+  await toggleBulkOption(page, 'Red')
+  await expect(applyButton(page)).toBeEnabled()
 })
 
 test.describe('on a narrow screen', () => {
