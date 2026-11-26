@@ -28,6 +28,7 @@ const ROUTES: [RouterMethod, string, () => Promise<{ default: EventHandler }>][]
   ['get', '/api/scenarios', () => import('../../server/api/scenarios/index.get')],
   ['post', '/api/scenarios', () => import('../../server/api/scenarios/index.post')],
   ['get', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.get')],
+  ['put', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.put')],
   ['delete', '/api/scenarios/:sid', () => import('../../server/api/scenarios/[sid]/index.delete')],
 ]
 

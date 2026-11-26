@@ -59,12 +59,36 @@ const attributeInputSchema = z
     }
   })
 
+/** Reports each id or ref that an earlier entry already used, anywhere in the scenario. */
+function rejectRepeats(ctx: z.RefinementCtx, entries: { value: string | undefined; path: (string | number)[] }[]) {
+  const seen = new Set<string>()
+  for (const { value, path } of entries) {
+    if (value === undefined) continue
+    if (seen.has(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: `Each ${path.at(-1)} can be used only once` })
+    }
+    seen.add(value)
+  }
+}
+
 /** A whole scenario as the editor saves it. Positions come from array order. */
 export const scenarioInputSchema = z.object({
   name: text('name', NAME_MAX),
   attributes: z.array(attributeInputSchema).superRefine((attributes, ctx) => {
     for (const index of repeatedIndexes(attributes.map((attribute) => attribute.name))) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, 'name'], message: 'Attribute names must be unique' })
+    }
+    rejectRepeats(
+      ctx,
+      attributes.map((attribute, a) => ({ value: attribute.id, path: [a, 'id'] })),
+    )
+    for (const key of ['id', 'ref'] as const) {
+      rejectRepeats(
+        ctx,
+        attributes.flatMap((attribute, a) =>
+          attribute.options.map((option, o) => ({ value: option[key], path: [a, 'options', o, key] })),
+        ),
+      )
     }
   }),
 })
