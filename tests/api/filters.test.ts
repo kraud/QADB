@@ -226,7 +226,8 @@ describe('attribute filters', () => {
 
     expect(await texts(ids.map((id): [string, string] => ['none', id]))).toHaveLength(5)
     expect(await texts(ids.map((id): [string, string] => ['option', `${id}-o`]))).toEqual([])
-  })
+    // About 2s on an idle machine: the default 5s is too tight on a busy one.
+  }, 30_000)
 })
 
 describe('track record filters', () => {
