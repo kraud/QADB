@@ -17,6 +17,7 @@ logs
 coverage/
 playwright-report/
 test-results/
+recording/videos/
 
 # Local env files
 .env

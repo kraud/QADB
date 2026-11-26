@@ -1,6 +1,17 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -148,6 +159,75 @@ describe('resetLocal', () => {
     await expect(resetLocal({ source: source(), root, port: await freePort() })).rejects.toThrow()
 
     expect(readFileSync(data, 'utf8')).toBe('current')
+  })
+
+  /** A current database, and a restorable copy of the backup beside it, inside the root. */
+  function databaseInRoot() {
+    mkdirSync(join(root, 'dbs', 'default'), { recursive: true })
+    writeFileSync(data, 'current')
+    const inside = join(root, 'inside.db')
+    copyFileSync(backup, inside)
+    return inside
+  }
+
+  it.each([
+    ['a file in it', (inside: string) => inside],
+    [
+      'a link to a file in it',
+      (inside: string) => {
+        const link = join(dir, 'link.db')
+        symlinkSync(inside, link)
+        return link
+      },
+    ],
+    [
+      'a file reached through a link to it',
+      () => {
+        symlinkSync(root, join(dir, 'linked'))
+        return join(dir, 'linked', 'inside.db')
+      },
+    ],
+  ])('refuses, changing nothing, a source in the directory it clears: %s', async (_name, source) => {
+    const inside = databaseInRoot()
+
+    await expect(resetLocal({ source: source(inside), root, port: await freePort() })).rejects.toThrow(
+      /inside the local database directory/,
+    )
+
+    expect(digest(inside)).toBe(digest(backup))
+    expect(readFileSync(data, 'utf8')).toBe('current')
+  })
+
+  it('refuses such a source also when the directory is named through a link', async () => {
+    const inside = databaseInRoot()
+    const linked = join(dir, 'linked')
+    symlinkSync(root, linked)
+
+    await expect(resetLocal({ source: inside, root: linked, port: await freePort() })).rejects.toThrow(
+      /inside the local database directory/,
+    )
+
+    expect(existsSync(inside)).toBe(true)
+  })
+
+  // Only where the file system ignores case does the other spelling name the same file.
+  it.skipIf(!existsSync(import.meta.filename.toUpperCase()))('is not fooled by another spelling', async () => {
+    databaseInRoot()
+    const source = join(dir, '.LOCALDB', 'inside.db')
+
+    await expect(resetLocal({ source, root, port: await freePort() })).rejects.toThrow(
+      /inside the local database directory/,
+    )
+  })
+
+  it('accepts a source beside the directory whose name begins like it', async () => {
+    mkdirSync(`${root}-copies`)
+    const beside = join(`${root}-copies`, 'backup.db')
+    copyFileSync(backup, beside)
+
+    await resetLocal({ source: beside, root, port: await freePort() })
+
+    expect(readUsers().map((user) => user.username)).toContain('someone')
   })
 
   it('picks the newest .db file as the default backup', () => {

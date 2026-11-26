@@ -2,10 +2,10 @@
 //
 //   pnpm db:reset-local [backup.db]     (default: the newest in ~/Documents/Backups/QADB/)
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs'
 import { connect, createServer } from 'node:net'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { createId } from '@paralleldrive/cuid2'
@@ -63,6 +63,13 @@ async function ensureTestUser(db) {
   return true
 }
 
+/** Whether the file lies in the directory, links followed and spelled as on disk. */
+function isInside(file, dir) {
+  if (!existsSync(dir)) return false
+  const path = relative(realpathSync.native(dir), realpathSync.native(file))
+  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)
+}
+
 /**
  * Recreates `<root>/dbs/default/data` from a backup and discards all other server state. The backup
  * is only read. The copy is prepared and checked first, so a failure keeps the current database.
@@ -73,6 +80,10 @@ export async function resetLocal({ source, root = ROOT, port = PORT, log = () =>
   await assertPortFree(port)
   const from = resolve(source)
   if (!statSync(from).isFile()) throw new Error(`${from} is not a file`)
+  // It would be deleted along with the database it replaces.
+  if (isInside(from, root)) {
+    throw new Error(`${from} is inside the local database directory, which gets cleared. Copy it elsewhere first.`)
+  }
 
   // The database holds password hashes: only the owner may read it.
   mkdirSync(root, { recursive: true, mode: 0o700 })

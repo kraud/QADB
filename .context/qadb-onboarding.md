@@ -162,8 +162,8 @@ export const usePracticeStore = defineStore('practice', () => {
 Turso is a managed **libSQL** database — SQLite-wire-compatible over the network. Differences from Postgres you'll care about:
 
 - **Dialect:** SQLite. No `SERIAL`, no enums-as-types, no native `DATE`/timestamps — everything is `INTEGER`/`TEXT`. QADB stores timestamps as **unix milliseconds** in integer columns.
-- **Schema changes:** `drizzle-kit push` syncs schema directly (dev); for production you'd run it once against the remote DB. No migration files in this project (`out: './drizzle'` is set but unused).
-- **URLs:** `libsql://host.turso.io` (network). The project uses the **pure-JS** `@libsql/client/http` + `drizzle-orm/libsql/http` adapter (no native binary, serverless-safe) — it serves `libsql:`/`https:`/`http:` only, **not** `file:`. `drizzle.config.ts` auto-picks `sqlite` vs `turso` dialect from the URL prefix for `drizzle-kit push`.
+- **Schema changes:** only through the migration script, `pnpm db:migrate` (see the README). Never push a schema straight to a database: that can drop data.
+- **URLs:** `libsql://host.turso.io` (network). The project uses the **pure-JS** `@libsql/client/http` + `drizzle-orm/libsql/http` adapter (no native binary, serverless-safe) — it serves `libsql:`/`https:`/`http:` only, **not** `file:`.
 - **`createClient({ url, authToken })`** — the auth token is passed to the client, not a connection string password.
 
 ### 6.2 Drizzle, schema-first
@@ -242,7 +242,7 @@ The **queries are SQL-builder style**, not Prisma-style:
 pnpm dev          # dev server (http://localhost:3000)
 pnpm typecheck    # vue-tsc type check (needs .nuxt types — postinstall runs nuxt prepare)
 pnpm build        # production build (Nitro; auto-detects Vercel preset)
-pnpm drizzle-kit push   # sync schema to the DB (Turso or local file, per .env)
+NUXT_TURSO_URL=http://127.0.0.1:8080 pnpm db:migrate   # create or update the local tables
 ```
 
 Env: copy `.env.example` → `.env`. `NUXT_TURSO_URL` (Turso `libsql://` URL), `TURSO_AUTH_TOKEN`, `NUXT_SESSION_PASSWORD` (≥32 chars). The first two are server-only; runtimeConfig keeps them off the client.

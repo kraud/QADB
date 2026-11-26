@@ -19,7 +19,7 @@ own **attributes** and **options**, and practices the questions while the app ke
 
 ```sh
 pnpm install
-cp .env.example .env    # then fill in NUXT_SESSION_PASSWORD
+cp -n .env.example .env    # keeps an existing .env; then fill in NUXT_SESSION_PASSWORD
 ```
 
 `.env.example` points at the local database. Before running the app, make sure `NUXT_TURSO_URL` in
@@ -51,7 +51,8 @@ A new database has no accounts: register one in the app.
 running it again does nothing. It reads only the `NUXT_TURSO_URL` environment variable, never a
 `.env` file. Each migration runs in one transaction; if a check fails, nothing changes.
 
-Never use `drizzle-kit push` on this project: it can drop data.
+The migration script is the only way to change the schema of any database. Pushing a schema straight
+from `db/schema.ts` can drop data, so the project has no tool that does it; do not add one.
 
 ### Reset from a backup
 
@@ -63,7 +64,8 @@ pnpm db:reset-local path/to/backup.db     # a specific one
 ```
 
 This replaces everything in `.localdb/` with a copy of the backup (the backup is only read) and adds
-the local test account from `.env.testuser` if the backup lacks it. Start `pnpm db:local` again and
+the local test account from `.env.testuser` if the backup lacks it. A file inside `.localdb/` is
+refused as a backup, since it would be deleted with the rest. Start `pnpm db:local` again and
 migrate. A backup holds password hashes: keep it, and `.localdb/`, private.
 
 ### Demo data
@@ -152,7 +154,24 @@ Record only the demo data, on the local database.
 The deployed app uses a remote database. Migrating it is a separate rollout that needs the owner's
 **explicit approval** each time; nothing in development or testing should connect to it.
 
-Once approved: take a fresh backup, rehearse on it locally (reset, migrate), migrate the remote
-database with `pnpm db:migrate --allow-remote`, deploy the matching code in the same window, and
-verify. To roll back, restore the backup and redeploy the previous version. A branch that needs a
-migration is not merged to `main` before this.
+`pnpm db:migrate --allow-remote` is the command that migrates it. Run it only with that approval, and
+with both of these set in the environment of the command (the script loads no `.env` file):
+
+- `NUXT_TURSO_URL`: the address of the remote database;
+- `TURSO_AUTH_TOKEN` (or `NUXT_TURSO_TOKEN`): its auth token. Do not put it in a file in the
+  repository or leave it in the shell history.
+
+Rollout, once approved:
+
+1. Take a fresh backup and rehearse on it locally (reset, migrate).
+2. Rehearse on a copy of the remote database too, and check `pragma foreign_keys` on that copy: the
+   migration and the app's cascading deletes were verified on local `sqld`.
+3. Build the preview deployment of the matching code first, so that nothing is left to build later.
+4. Stop writes: nobody uses the app from here until the new version is live.
+5. Back up again if anything was written since step 1, then migrate with
+   `pnpm db:migrate --allow-remote`.
+6. Promote the preview deployment.
+7. Verify the counts (questions and attempts per user) against the backup, and try the app.
+
+To roll back, restore the backup and redeploy the previous version. A branch that needs a migration
+is not merged to `main` before this.
