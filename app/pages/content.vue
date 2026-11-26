@@ -115,7 +115,7 @@ function resetFilters() {
   filters.cat = []
   filters.nbd = 'all'
   filters.mastered = 'all'
-  filters.op = '>'
+  filters.op = 'all'
   filters.n = 0
   filters.recent = false
   filters.q = ''
